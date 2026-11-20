@@ -13,7 +13,7 @@
 
 Design cabinets, doors and shop furniture in your browser, then let Shop Foreman plan the job around the tools you actually have. It works out every part, decides what goes on the CNC and what goes on the saw, and gives you a buying list, cut lists, G-code, printable jigs and a build checklist.
 
-There is no server and no account. Your projects stay in your browser and can be exported as files.
+It runs at **[shopforeman.yeager.dev](https://shopforeman.yeager.dev)**, built from `main`. There is no server and no account. Your projects stay in your browser, under that address, and can be exported as files.
 
 The version is shown at the foot of every page. It is 0.x until the app has been proven on a machine and saved work is kept from one version to the next.
 
