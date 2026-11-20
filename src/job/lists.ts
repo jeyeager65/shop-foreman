@@ -4,7 +4,7 @@
  * drilled with the Kreg jig, each with its positions. All derived from the job;
  * nothing here is stored and nothing changes a part.
  */
-import { DROP_LEAF, SEATING, seatingBrackets, seatingEdgeLength, FRAME_DOWELS, LEAF, frameLeafOf, frameTop, backAgainstWall, dropLeafHinges, dropLeafSupport, leafEdgeWords, leafSidesWords, towerSpans, closetRod, hangingWords, framesOf, frameFasteners, needsAntiTip, deriveUnderSink, deriveSusan, susanOf, doorsOnSusan, CASE_SCREW, finishAmounts, cansOf, usesWords, coverageShown, coverageUnit, casterGroups, isCaster, boughtLength, boughtTopOf, lazySusanDiameter, topPieces, topSettingsOf, RUNNER_SCREW, RUNNER_SCREWS, fasteningHole, cabinetIdOf, cabinetsOf, copiesOf, partTag, designsOf, drawerBox, hungDesigns, isDoorSet, isDrawer, partFaces, shelfPinFor } from '@/design';
+import { DROP_LEAF, SEATING, seatingBrackets, seatingEdgeLength, FRAME_DOWELS, LEAF, frameLeafOf, frameTop, backAgainstWall, dropLeafHinges, dropLeafSupport, leafEdgeWords, leafSidesWords, towerSpans, closetRod, hangingWords, framesOf, frameFasteners, needsAntiTip, deriveUnderSink, falseFrontsOf, deriveSusan, susanOf, doorsOnSusan, CASE_SCREW, finishAmounts, cansOf, usesWords, coverageShown, coverageUnit, casterGroups, isCaster, boughtLength, boughtTopOf, lazySusanDiameter, topPieces, topSettingsOf, RUNNER_SCREW, RUNNER_SCREWS, fasteningHole, cabinetIdOf, cabinetsOf, copiesOf, partTag, designsOf, drawerBox, hungDesigns, isDoorSet, isDrawer, partFaces, shelfPinFor } from '@/design';
 import { HUB, hubOf } from '@/design/hub';
 import { POCKET, jigSleeve, lowPocketScrew, pocketAxis, pocketShape, sleeveWords } from '@/geometry/pocketHole';
 import { cncPocketsFit, lowAngleOf, pocketHoleMethod, pocketSeatOf } from '@/plan/parts';
@@ -814,6 +814,11 @@ export function buildLists(job: Job, project: Project, shop: Shop, length: (mm: 
     const under = deriveUnderSink(cabinet, shop.materials, shop.hardware);
     for (const h of under?.jigHeights ?? []) if (slideJigProblems(h).length === 0) jigHeights.add(h);
     if (under?.tiltOut) hardware.push({ group: 'Under the sink', item: 'Tilt-out tray hinges', quantity: copiesOf(cabinet), unit: 'pair', note: 'The false front over the doors hangs on them and tips forward; the tray is screwed to its back (tune me: choose a pair that suits the front).' });
+    // A false front made here: tilt-out hinges for one that tips, screws for one that is fixed.
+    const falseFronts = falseFrontsOf(project, cabinet, shop.materials);
+    const tilting = falseFronts.filter((f) => f.design.falseFront?.tiltOut).length;
+    if (tilting) hardware.push({ group: 'False fronts', item: 'Tilt-out tray hinges', quantity: tilting * copiesOf(cabinet), unit: 'pair', note: 'The false front hangs on them and tips forward; its tray is screwed to its back (tune me: choose a pair that suits the front).' });
+    if (falseFronts.length > tilting) hardware.push({ group: 'False fronts', item: '#8 × 1-1/4" wood screws', quantity: 4 * (falseFronts.length - tilting) * copiesOf(cabinet), note: 'Four through from behind each fixed false front: through its blocks, or through the face frame\'s stiles.' });
     const rackCount = under?.doorRacks?.racks.length ?? 0;
     if (rackCount) hardware.push({ group: 'Under the sink', item: '#6 × 1" flat-head wood screws', quantity: 4 * rackCount * copiesOf(cabinet), note: `Door racks: four through the back strip of each into the door. Shorter than the strip and the door together (tune me: a 3/4" door takes 1").` });
     for (const b of under?.bottomSlides ?? []) {

@@ -29,7 +29,8 @@ export type PocketLook = ({ kind: 'kreg' } | { kind: 'cnc' } | { kind: 'low'; an
 
 /**
  * How a part moves with the 3D view's Doors slider when it is not an ordinary hinged door. Display
- * only, never stored or planned from. `turn`: about a vertical line through `axis` (x, z in its cabinet), as a
+ * only, never stored or planned from. `tilt`: a false front on tilt-out hinges and its tray, which tip forward
+ * about a level line across the cabinet through `axis` (y, z), the bottom edge of the front's back face. `turn`: about a vertical line through `axis` (x, z in its cabinet), as a
  * lazy susan with its doors on it does. `follow`: the second door of a bi-fold pair, hinged to the door `partId`:
  * it goes where that door goes, unfolding from it as the pair opens. `fold`: a table's leaf, which
  * swings down about a level line across the cabinet through `axis` (y, z), with the view's Leaf slider. `first`: a
@@ -42,7 +43,7 @@ export type PocketLook = ({ kind: 'kreg' } | { kind: 'cnc' } | { kind: 'low'; an
  * `swingIn`: a bracket under a drop leaf, which swings in flat under the part that stays before the leaf
  * goes down: a quarter turn about an upright line through `axis` (x, z), in the first of the Leaf slider's travel.
  */
-export type PartMoves = { kind: 'turn'; axis: [Mm, Mm] } | { kind: 'follow'; partId: Id } | { kind: 'fold'; axis: [Mm, Mm]; across?: 1 | -1; front?: true; first?: { at: [Mm, Mm]; sign: 1 | -1 } } | { kind: 'swingIn'; axis: [Mm, Mm]; sign: 1 | -1 };
+export type PartMoves = { kind: 'tilt'; axis: [Mm, Mm] } | { kind: 'turn'; axis: [Mm, Mm] } | { kind: 'follow'; partId: Id } | { kind: 'fold'; axis: [Mm, Mm]; across?: 1 | -1; front?: true; first?: { at: [Mm, Mm]; sign: 1 | -1 } } | { kind: 'swingIn'; axis: [Mm, Mm]; sign: 1 | -1 };
 
 export interface Part {
   moves?: PartMoves;

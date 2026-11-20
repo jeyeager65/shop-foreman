@@ -57,6 +57,8 @@ export interface PlacedPart {
   across?: Mm;
   /** It turns about a vertical line through this point (x, z) with the view's Doors slider: a lazy susan with its doors on it (`Part.moves`). */
   turnsAbout?: [Mm, Mm];
+  /** It tips forward about a level line across the cabinet through this point (y, z) with the Doors slider: a tilt-out false front and its tray. */
+  tiltsAbout?: [Mm, Mm];
   /** It swings down about a level line across the cabinet through this point (y, z) with the view's Leaf slider: a table's leaf (`Part.moves`). */
   foldsAbout?: [Mm, Mm];
   /** A bracket under a drop leaf: it swings in a quarter turn about an upright line through `at` (x, z) before the leaf goes down (`Part.moves`). */
@@ -623,6 +625,7 @@ export function buildCabinetAssembly(all: Part[], hardware: Hardware[] = [], sli
       explode,
       swing: part.role || part.moves ? undefined : doorSwing(part, sides),
       ...(part.moves?.kind === 'turn' ? { turnsAbout: part.moves.axis } : {}),
+      ...(part.moves?.kind === 'tilt' ? { tiltsAbout: part.moves.axis } : {}),
       ...(part.moves?.kind === 'swingIn' ? { swingsIn: { at: part.moves.axis, sign: part.moves.sign } } : {}),
       ...(part.moves?.kind === 'fold' ? { foldsAbout: part.moves.axis, ...(part.moves.across ? { foldsAcross: part.moves.across } : {}), ...(part.moves.front ? { foldsFront: true as const } : {}), ...(part.moves.first ? { foldsFirst: part.moves.first } : {}) } : {}),
       ...(follows ? { follows } : {}),

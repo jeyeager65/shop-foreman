@@ -134,6 +134,7 @@ export function deriveCabinetOpenings(cabinet: CabinetDesign, materials: Materia
         ...(fixedOverlay ? { fixedOverlay: { ...fixedOverlay, ...edges } } : {}),
         ...(inset ? { inset: { gap: inset.gap, frontMaterialId: cabinet.materials.caseId } } : {}),
         ...(rules.inFrame ? { inFrame: true as const } : {}),
+        ...(i === 0 && row.use === 'drawer' && parts === 1 && rows[1]?.use === 'doors' && !cabinet.existing ? { overDoors: true as const } : {}),
         ...(several ? { bay: b + 1 } : {}),
       };
       if (parts === 1) return [whole];

@@ -523,6 +523,8 @@ export function drawerBox(design: DrawerDesign, project: Project, shop: Pick<Sho
 function boxInFrame(design: DrawerDesign, project: Project, shop: Pick<Shop, 'materials' | 'hardware'>, cabinet: CabinetDesign, opening: CabinetOpening): DrawerBox | undefined {
   // In a case that is already there the box and its slides are there too: only a front is ever made.
   if (cabinet.existing) return undefined;
+  // A false front is a front only.
+  if (design.falseFront && opening.overDoors) return undefined;
   // What is over it: the runners of a drawer on runners in the opening above, if there is one.
   const rows = cabinetOpeningsOf(project, shop.materials).filter((o) => o.cabinetId === cabinet.id && (o.bay ?? 1) === (opening.bay ?? 1));
   const above = rows[rows.findIndex((o) => o.id === opening.id) - 1];

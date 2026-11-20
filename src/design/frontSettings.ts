@@ -126,7 +126,7 @@ export function splitFront(whole: DesignObject): { stored: StoredDoorSet | Store
     return { stored: { id, template: 'doorSet', name, mounting }, settings: { ...pick(whole, DOOR_KEYS), ...pick(whole.mounting, HINGE_KEYS) } };
   }
   return {
-    stored: { id, template: template as 'drawer', name, mounting: whole.mounting, slide: pick(whole.slide, ['length']), box: pick(whole.box, ['height']) },
+    stored: { id, template: template as 'drawer', name, mounting: whole.mounting, slide: pick(whole.slide, ['length']), box: pick(whole.box, ['height']), ...(whole.falseFront ? { falseFront: whole.falseFront } : {}) },
     settings: { ...pick(whole, DRAWER_KEYS), ...pick(whole.slide, SLIDE_KEYS), ...pick(whole.box, BOX_KEYS) },
   };
 }

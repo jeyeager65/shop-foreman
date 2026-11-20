@@ -30,6 +30,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { isApplianceShape } from '@/design/appliances';
 import { hubShapeColour } from '@/design/hub';
 import type { ApplianceKind } from '@/model';
+import { FALSE_FRONT } from '@/design/falseFront';
 import { BIFOLD_UNFOLD_DEG, type CabinetAssembly, MAX_DOOR_OPEN_DEG, type PlacedPart, type SlideMount, buildCabinetAssembly, placedDoorPose, grainStreaks, insetSwingShift } from '@/design/cabinetAssembly';
 import type { SolidMesh } from '@/geometry/solids';
 import { finishedColor, showsGrain } from '@/design/finish';
@@ -669,7 +670,14 @@ function apply() {
         .premultiply(turn.makeRotationX((part.foldsFront ? 1 : -1) * down * (Math.PI / 2)))
         .premultiply(move.makeTranslation(0, y, z));
     }
-    if (part.turnsAbout) {
+    if (part.tiltsAbout) {
+      // A tilt-out false front and its tray: forward about the front's bottom edge, a few degrees over the slider's travel.
+      const [y, z] = part.tiltsAbout;
+      object.matrix
+        .premultiply(move.makeTranslation(0, -y, -z))
+        .premultiply(turn.makeRotationX(THREE.MathUtils.degToRad((openDeg.value / MAX_DOOR_OPEN_DEG) * FALSE_FRONT.tiltDeg)))
+        .premultiply(move.makeTranslation(0, y, z));
+    } else if (part.turnsAbout) {
       // With a lazy susan: half a turn over the slider's travel, about its pole.
       const [x, z] = part.turnsAbout;
       object.matrix
@@ -949,7 +957,7 @@ function show(response: SolidResponse, { parts, cabinets, room }: Shown) {
   const min: Vec3 = [Infinity, Infinity, Infinity];
   const max: Vec3 = [-Infinity, -Infinity, -Infinity];
   assembly = { parts: all, min, max, explodeDistance: Math.max(0, ...groups.map((g) => g.assembly.explodeDistance)) };
-  hasDoors.value = all.some((p) => p.swing || p.turnsAbout || p.follows);
+  hasDoors.value = all.some((p) => p.swing || p.turnsAbout || p.tiltsAbout || p.follows);
   hasDrawers.value = all.some((p) => p.slide);
   hasLeaf.value = all.some((p) => p.foldsAbout);
   hasTop.value = all.some(isTopPart) && all.some((p) => !isTopPart(p));

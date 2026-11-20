@@ -31,7 +31,8 @@ export function slideFor(design: DrawerDesign, hardware: Hardware[]): Slide {
  * front: wide, the plain box, or a box on wooden runners with no slides at all.
  */
 export function drawerFrontKind(design: DrawerDesign, opening: CabinetOpening): 'applied' | 'wide' | 'plain' | 'runners' {
-  if (!opening.inset) return 'applied';
+  // A false front has no box: on an inset case it is a front of its own, as an applied one is.
+  if (!opening.inset || (design.falseFront && opening.overDoors)) return 'applied';
   // Inset, a front of its own is a choice beside the three where the box's front wall is the front.
   return design.shop?.front === 'plain' || design.shop?.front === 'runners' || design.shop?.front === 'applied' ? design.shop.front : 'wide';
 }

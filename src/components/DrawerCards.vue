@@ -34,6 +34,7 @@ import {
   RUNNER_SIDE_CLEARANCE,
   RUNNER_TOP_CLEARANCE,
   WIDE_FRONT_DADO_DEPTH,
+  FALSE_FRONT,
   type DrawerBox,
   drawerBox,
   drawerFrontSize,
@@ -52,10 +53,29 @@ import { useAppStore } from '@/stores/app';
 import { wideFrontFields } from '@/components/wideFront';
 
 /** `frontOnly`: the drawer is in a cabinet that is already there, and only its front is made. */
-const props = defineProps<{ design: DrawerDesign; opening: Opening; fixed?: CabinetOpening['fixedOverlay']; inset?: CabinetOpening['inset']; shared?: boolean; frontOnly?: boolean }>();
+const props = defineProps<{ design: DrawerDesign; opening: Opening; fixed?: CabinetOpening['fixedOverlay']; inset?: CabinetOpening['inset']; shared?: boolean; frontOnly?: boolean; overDoors?: boolean }>();
 const store = useAppStore();
 const L = computed(() => store.sizeLength);
 const design = computed(() => props.design);
+/** A false front: offered on the top row over doors only, a front with no box and no slides. */
+const isFalse = computed(() => !!props.overDoors && !!design.value.falseFront);
+const falseOn = computed({
+  get: () => isFalse.value,
+  set: (on: boolean) => {
+    if (on) design.value.falseFront = {};
+    else delete design.value.falseFront;
+  },
+});
+const tiltOn = computed({
+  get: () => !!design.value.falseFront?.tiltOut,
+  set: (on: boolean) => {
+    if (!design.value.falseFront) return;
+    if (on) design.value.falseFront.tiltOut = { depth: { mm: FALSE_FRONT.trayDepth.start, unit: 'in' } };
+    else delete design.value.falseFront.tiltOut;
+  },
+});
+/** Behind a face frame a fixed false front is screwed through the stiles: an overlay front whose overlays are typed has one. */
+const hasFrame = computed(() => !props.fixed && !props.inset);
 /** The slide picker is told which drawer, and which cabinet to come back to. */
 const route = useRoute();
 const picker = computed(() => ({ path: '/design/slide', query: { drawer: design.value.id, ...(route?.query.cabinet ? { cabinet: route.query.cabinet } : {}) } }));
@@ -93,7 +113,7 @@ const setSide = (value: Length | null) => {
 /** The drawer's slide at its length; nothing when the drawer is not on a designed cabinet. */
 const slide = computed<SlideFit | undefined>(() => {
   // A drawer on runners has no slide; one that is already there keeps its own.
-  if (props.frontOnly || (props.inset && design.value.shop?.front === 'runners')) return undefined;
+  if (props.frontOnly || isFalse.value || (props.inset && design.value.shop?.front === 'runners')) return undefined;
   try {
     return drawerSlide(design.value, store.project!, store.jobShop);
   } catch {
@@ -201,6 +221,7 @@ watch(doorStyle, () => {
 
 /** The panel's one line while it is folded. */
 const summary = computed(() =>
+  isFalse.value ? `False front ${L.value(size.value.width)} × ${L.value(size.value.height)}${design.value.falseFront?.tiltOut ? ', tips out with a tray' : ', fixed'}` :
   [
     props.inset && design.value.shop?.front === 'applied'
       ? `Front ${L.value(size.value.width)} × ${L.value(size.value.height)}, inset`
@@ -227,13 +248,40 @@ const offDoors = computed(() => (side.value.from === 'own' && side.value.doors !
       <div class="text-body-2" data-test="drawer-follows">
         <template v-if="differs.length">Differs from Setup: {{ differs.join(', ') }}.</template>
         <template v-else-if="own">Its own copy of Setup's front, handle, slide and box, the same as Setup's for now.</template>
-        <template v-else-if="frontOnly">How the front is made and its handle follow Setup.</template>
+        <template v-else-if="frontOnly || isFalse">How the front is made and its handle follow Setup.</template>
         <template v-else>How the front is made, its handle, the slide and the box corners and materials follow Setup.</template>
       </div>
       <v-btn v-if="!own" variant="text" size="small" color="primary" class="mb-2" data-test="own-drawer" @click="own = true">Make this drawer different</v-btn>
       <v-btn v-else variant="text" size="small" class="mb-2" data-test="follow-setup-drawer" @click="own = false">Follow Setup again</v-btn>
     </template>
-    <template v-if="inset">
+    <template v-if="overDoors">
+      <v-switch v-model="falseOn" label="A false front (no box, no slides)" color="primary" density="compact" hide-details data-test="false-front" />
+      <template v-if="isFalse">
+        <v-switch v-model="tiltOn" label="Tips out, with a tray behind it" color="primary" density="compact" hide-details data-test="false-front-tilt" />
+        <v-row v-if="design.falseFront?.tiltOut" density="compact">
+          <v-col cols="4"><LengthField v-model="design.falseFront.tiltOut.depth" label="Tray, deep" /></v-col>
+        </v-row>
+        <HelpText>
+          <template v-if="design.falseFront?.tiltOut">
+            It hangs on a pair of tilt-out hinges and tips forward. A shallow tray is screwed to its back, {{ L(FALSE_FRONT.trayNarrower) }}
+            narrower and {{ L(FALSE_FRONT.trayShorter) }} shorter than the opening, {{ L(FALSE_FRONT.trayDepth.min) }} to
+            {{ L(FALSE_FRONT.trayDepth.max) }} deep (tune me). The hinges are on the hardware list.
+          </template>
+          <template v-else>
+            Fixed: it is screwed from behind, through {{ hasFrame ? "the face frame's stiles" : 'a block screwed to each case side' }}.
+          </template>
+        </HelpText>
+      </template>
+    </template>
+    <template v-if="inset && isFalse">
+      <v-row v-if="fixed" density="compact" class="mt-1">
+        <v-col cols="4"><LengthField :model-value="asLength(-fixed.side)" label="Side gap" disabled /></v-col>
+        <v-col cols="4"><LengthField :model-value="asLength(-fixed.top)" label="Top gap" disabled /></v-col>
+        <v-col cols="4"><LengthField :model-value="asLength(-fixed.bottom)" label="Bottom gap" disabled /></v-col>
+      </v-row>
+      <div class="text-body-2 mt-3">One front, {{ L(size.width) }} × {{ L(size.height) }}, inset in its opening, flush with the case front.</div>
+    </template>
+    <template v-else-if="inset">
       <v-row v-if="editable" density="compact">
         <v-col cols="12"><v-select v-model="shopFront" label="Front" :items="SHOP_FRONTS" hide-details data-test="shop-front" /></v-col>
         <v-col v-if="shopFront !== 'applied'" cols="12"><v-select v-model="shopPull" label="Pull" :items="pulls" hide-details data-test="drawer-pull" /></v-col>
@@ -357,7 +405,7 @@ const offDoors = computed(() => (side.value.from === 'own' && side.value.doors !
     <div v-if="frontOnly" class="text-body-2 text-medium-emphasis mt-3" data-test="drawer-front-only">
       Only this front is made: the drawer's box and its slides are already there and stay. The new front is screwed to the box from inside.
     </div>
-    <template v-if="!frontOnly && (slide || box?.runners || (inset && boxError))">
+    <template v-if="!frontOnly && !isFalse && (slide || box?.runners || (inset && boxError))">
       <template v-if="slide">
       <SubHead>Slide</SubHead>
       <v-sheet border rounded="lg" class="pa-3 d-flex align-center mb-3">

@@ -990,6 +990,11 @@ export interface CabinetOpening {
   /** Between corner posts: the fronts sit inside the opening, their faces flush with the frame's (`fixedOverlay` is then all negative). */
   inFrame?: true;
   /**
+   * The top row, a drawer row whole across its bay, with doors under it, on a case made here: the one place a drawer
+   * may be a false front (`DrawerDesign.falseFront`), as over a sink.
+   */
+  overDoors?: true;
+  /**
    * The overlays of a front on this opening when the construction style fixes them
    * (frameless: full overlay; shop: inset, all negative). Unset when each front
    * carries its own (face frame). Negative where the front stops short of the

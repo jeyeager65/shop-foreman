@@ -2481,7 +2481,11 @@ function notes(part: Part): string[] {
               <v-btn size="small" variant="tonal" :prepend-icon="mdiPlus" data-test="add-organizer-dividers" @click="addOrganizer('dividers')">Dividers</v-btn>
               <v-btn v-if="cabinet.corner?.kind === 'blind'" size="small" variant="tonal" :prepend-icon="mdiPlus" data-test="add-organizer-blindTray" @click="addOrganizer('blindTray')">Blind corner tray</v-btn>
             </v-col>
-            <v-col cols="12">
+            <!-- On a case made here the tray goes with the false front, on the drawer over the doors (Fronts). -->
+            <v-col v-if="!existing && !cabinet.inside.tiltOut" cols="12" class="text-body-2 text-medium-emphasis" data-test="tilt-on-front">
+              A tilt-out tray goes behind a false front: make the drawer over the doors a false front that tips out, under Fronts.
+            </v-col>
+            <v-col v-if="existing || cabinet.inside.tiltOut" cols="12">
               <v-switch :model-value="!!cabinet.inside.tiltOut" label="A tilt-out tray behind the false front" color="primary" density="compact" hide-details data-test="tilt-on" @update:model-value="setTiltOut(!!$event)" />
             </v-col>
             <template v-if="cabinet.inside.tiltOut">
@@ -2574,7 +2578,7 @@ function notes(part: Part): string[] {
       </template>
       <template v-for="{ opening, drawer } in drawerRows" :key="opening.id">
         <div v-show="nav.currentSub?.id === (drawer?.id ?? `none:${opening.id}`)">
-        <DrawerCards v-if="drawer" :key="drawer.id" shared :design="drawer" :opening="asOpening(opening)" :fixed="opening.fixedOverlay" :inset="opening.inset" :front-only="!!existing" />
+        <DrawerCards v-if="drawer" :key="drawer.id" shared :design="drawer" :opening="asOpening(opening)" :fixed="opening.fixedOverlay" :inset="opening.inset" :front-only="!!existing" :over-doors="!!opening.overDoors" />
         <template v-else>
           <div class="text-body-2 text-medium-emphasis mb-3">No front on the {{ opening.name.toLowerCase() }} yet.</div>
           <v-btn color="primary" variant="tonal" @click="addDrawer(opening)">Add a drawer front</v-btn>

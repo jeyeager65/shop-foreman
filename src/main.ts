@@ -158,8 +158,12 @@ void store.load().then(async () => {
     const slideAsked = new URLSearchParams(location.search).get('slide');
     // &fingers=0.75x0.75 sizes its drawers' finger joints, in inches: each finger's width, and the most between two.
     const fingers = (new URLSearchParams(location.search).get('fingers') ?? '').split('x').map(Number);
+    // &falsefront=1 (or `tilt`, `tilt:3` with its tray's depth in inches) makes the drawer over the doors a false front.
+    const falseAsked = new URLSearchParams(location.search).get('falsefront');
     for (const d of store.project ? designsOf(store.project) : []) {
       if (d.template !== 'drawer') continue;
+      if (falseAsked === 'none') delete d.falseFront;
+      else if (falseAsked) d.falseFront = falseAsked.startsWith('tilt') ? { tiltOut: { depth: { mm: (Number(falseAsked.split(':')[1]) || 2.5) * 25.4, unit: 'in' } } } : {};
       if (box === 'rabbet' || box === 'pocketScrews' || box === 'tabs') d.box.cornerJoint = box;
       if (fingers.length === 2 && fingers.every((v) => v > 0)) d.box.fingers = { length: { mm: fingers[0]! * 25.4, unit: 'in' }, between: { mm: fingers[1]! * 25.4, unit: 'in' } };
       if (mount === 'strips' || mount === 'rearBrackets') d.slide.faceFrameMount = mount;

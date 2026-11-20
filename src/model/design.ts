@@ -94,7 +94,17 @@ export interface StoredDrawer {
   mounting: DrawerMounting;
   slide: Pick<DrawerSlideChoice, 'length'>;
   box: Pick<DrawerBoxDesign, 'height'>;
+  falseFront?: FalseFront;
   overrides?: DrawerSettings;
+}
+
+/**
+ * A drawer that is a front only, with no box and no slides: the false front over a sink's doors. Only on an opening
+ * that is `overDoors`; elsewhere it is not read. Fixed on two blocks behind it, unless it tips out: then it hangs on a
+ * pair of tilt-out hinges with a shallow tray screwed to its back, the tray's depth `tiltOut.depth`.
+ */
+export interface FalseFront {
+  tiltOut?: { depth: Length };
 }
 
 /** A drawer on a drawer opening: its front, the slide it runs on and its box. */
@@ -113,6 +123,8 @@ export interface DrawerDesign {
   shop?: ShopDrawerDesign;
   /** Its knob or pull, whose holes the CNC drills. Left out: none, or one fitted by hand. A finger pull takes its place. */
   handle?: DrawerHandleChoice;
+  /** A front only, with no box and no slides (`FalseFront`). */
+  falseFront?: FalseFront;
   /** On a designed cabinet: the stored settings this drawer has made its own. Read only. */
   readonly overrides?: DrawerSettings;
 }

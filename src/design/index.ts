@@ -3,6 +3,7 @@ import type { CabinetDesign, CabinetOpening, DesignObject, Material, Mm, Opening
 import { withMaterialSettings, projectMachineId, toolsOnMachine } from '@/libraries';
 import { deriveCaseParts, kickBoardHeight, kickBoardOutline } from './case';
 import { deriveUnderSink } from './underSink';
+import { falseFrontParts, falseFrontTilt } from './falseFront';
 import { deriveSusan } from './susan';
 import { boxOf, shiftedParts } from './style';
 import { edgeStripParts } from './edgeStrips';
@@ -80,6 +81,7 @@ export * from './closet';
 export * from './standsOn';
 export * from './doorRacks';
 export * from './underSink';
+export * from './falseFront';
 export * from './pattern';
 export * from './patternLooks';
 export * from './tileDrawings';
@@ -179,7 +181,10 @@ export function deriveParts(project: Project, shop: Shop): Part[] {
         : deriveDrawerParts(design, opening, drawerSideOverlay(design, hung, shop.hardware).overlay, shop.materials, shop.hardware)
     ).map((part) => withGrain(part, isDoorSet(design) ? 'door' : 'drawerFront', shop.materials));
     const gap = isDoorSet(design) && design.mounting.doors === 2 ? design.mounting.gap.mm : 0;
-    const placed = inCabinet ? placeFronts(noCups(parts), inCabinet, design.mounting.overlayBottom.mm, gap) : parts;
+    const placedFronts = inCabinet ? placeFronts(noCups(parts), inCabinet, design.mounting.overlayBottom.mm, gap) : parts;
+    // A false front on tilt-out hinges tips forward with the Doors slider.
+    const tilt = !isDoorSet(design) && inCabinet ? falseFrontTilt(design, inCabinet, shop.materials) : undefined;
+    const placed = tilt ? placedFronts.map((part) => ({ ...part, moves: tilt })) : placedFronts;
     const cabinet = cabinets.find((c) => c.id === inCabinet?.cabinetId);
     if (!isDoorSet(design) || cabinet?.corner?.kind !== 'lShaped') return placed;
     // An L-shaped corner cabinet's two doors. Fixed to a lazy susan they have no hinges and turn with it; else they
@@ -469,6 +474,8 @@ export function deriveCabinetParts(project: Project, shop: Shop): Part[] {
     // An existing case: nothing of it is made, only what goes inside it.
     ...(cabinet.existing ? [] : madeCase(cabinet)),
     ...(deriveUnderSink(cabinet, shop.materials, shop.hardware)?.parts ?? []),
+    // A false front's blocks, or the tray behind one that tips out.
+    ...falseFrontParts(project, cabinet, shop.materials),
   ]);
   /** The case of a cabinet made here: its box, its face frame, and what stands under and beside it. */
   function madeCase(cabinet: CabinetDesign): Part[] {
