@@ -27,6 +27,7 @@ import { BOX_BOTTOM_PLAY, BOX_CLEAR_UNDER, BOX_GROOVE_DEPTH, BOX_GROOVE_UP, BOX_
 import { withGrain } from './grain';
 import { deriveCabinetOpenings } from './openings';
 import { isSlide } from './slides';
+import { sinkBowlBlock } from './sinks';
 import { boxOf, constructionRules, shiftedParts, thicknessOf, toeKickOf } from './style';
 
 /** The least a tray's slide stands in from the edge of the door opening, each side: the hinges stand in it. Tune me. */
@@ -291,6 +292,9 @@ export const isTrayPart = (part: Pick<Part, 'id' | 'role'>) => !!part.role?.star
 /** The tray a tray's part belongs to. */
 export const trayOf = (part: Pick<Part, 'id'>) => part.id.slice(0, part.id.lastIndexOf('/'));
 
+/** The id of the block a cabinet's own sink's bowl is in the way as. */
+export const SINK_BOWL_BLOCK = 'sink-bowl';
+
 /** Where each block of a cabinet's list stands, in its frame. One with no size, or none left under the top, is left out. */
 export function obstacleBlocks(cabinet: CabinetDesign, materials: Material[]): ObstacleBlock[] {
   // Behind a face frame that overhangs its sides the box is narrower than the cabinet (`boxOf`): worked out in the box, stood where it is.
@@ -315,6 +319,9 @@ function blocksInBox(cabinet: CabinetDesign, materials: Material[]): ObstacleBlo
     if (y1 <= y0 || o.width.mm <= 0 || o.depth.mm <= 0) continue;
     blocks.push({ id: o.id, kind: o.kind, name: obstacleName(o), min: [x0, y0, z0], max: [x0 + o.width.mm, y1, Math.min(0, z0 + o.depth.mm)] });
   }
+  // The cabinet's own sink: its bowl hangs under the top, from the sink's sizes, not measured.
+  const bowl = sinkBowlBlock(cabinet);
+  if (bowl && bowl.min[1] < ceiling) blocks.push({ id: SINK_BOWL_BLOCK, kind: 'bowl', name: "the sink's bowl", min: bowl.min, max: [bowl.max[0], ceiling, bowl.max[2]] });
   return blocks;
 }
 
@@ -1008,7 +1015,8 @@ function underSinkInBox(cabinet: CabinetDesign, materials: Material[], hardware:
 
 /** The blocks in the way, for the picture: drawn in metal, never cut (`isApplianceShape`). */
 export function obstacleShapes(cabinet: CabinetDesign, materials: Material[]): Part[] {
-  return obstacleBlocks(cabinet, materials).map(({ id, name, min, max }): Part => {
+  // (The sink's own bowl is drawn with the sink.)
+  return obstacleBlocks(cabinet, materials).filter((b) => b.id !== SINK_BOWL_BLOCK).map(({ id, name, min, max }): Part => {
     const size = { width: max[0] - min[0], height: max[1] - min[1], thickness: max[2] - min[2] };
     return {
       id: `${cabinet.id}/appliance-obstacle-${id}/shape`,

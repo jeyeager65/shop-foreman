@@ -405,19 +405,19 @@ export type RoomWall = 'back' | 'left' | 'right' | 'front';
  * degrees (0 faces the front wall).
  */
 /** The kinds of appliance a room can hold. Generic: a size and a place, nothing made for them. */
-export type ApplianceKind = 'refrigerator' | 'dishwasher' | 'range' | 'microwave' | 'sink';
+export type ApplianceKind = 'refrigerator' | 'dishwasher' | 'range' | 'microwave';
 
 /**
  * An appliance standing in the room: a generic box with a size, placed
  * against a wall or free like a cabinet in no run. Nothing is cut for it. It is drawn, and a
  * top beside it runs over it (a dishwasher) or butts its side (a range, a refrigerator).
- * A sink is set in the top over where it stands: its opening is cut through that top.
+ * A sink is not one: it is its cabinet's (`CabinetSink`).
  */
 export interface Appliance {
   id: Id;
   kind: ApplianceKind;
   name: string;
-  /** Width across its front, height, and depth from the wall to its front, handles and doors included. A sink: its rim's width and depth, and its bowl's depth as the height. */
+  /** Width across its front, height, and depth from the wall to its front, handles and doors included. */
   size: { width: Length; height: Length; depth: Length };
   /** Its underside off the floor: a microwave hung over a range. Left out: it stands on the floor. */
   offFloor?: Length;
@@ -439,6 +439,37 @@ export interface StartSizes {
   tall: { height: Length; depth: Length };
   /** The standard widths Design offers as quick picks beside the width input. */
   widths: Record<CabinetForm, Length[]>;
+}
+
+/**
+ * How a sink is set in its top. `dropIn`: its rim lies on the top, its bowl down through an opening a little smaller
+ * than the rim. `undermount`: fixed under the top, the opening its bowl's, the top's cut edge showing. `vessel`: a bowl
+ * standing on the top, only its drain through it. `integrated`: a bought top with its bowl in it (cultured marble,
+ * ceramic): no top is made over the cabinet. `farmhouse`: an apron-front sink standing on a frame inside the
+ * cabinet, its apron the front of the cabinet's top row, the top notched round it.
+ */
+export type SinkMount = 'dropIn' | 'undermount' | 'vessel' | 'integrated' | 'farmhouse';
+
+/**
+ * A sink over a base cabinet. Its sizes are the maker's: `width` across and `depth` front to back are its outside
+ * (the rim of a drop-in, the bowl's outside of an undermount, a vessel or a farmhouse sink, the whole top of an
+ * integrated one), `bowlDepth` how deep its bowl is.
+ */
+export interface CabinetSink {
+  mount: SinkMount;
+  width: Length;
+  depth: Length;
+  bowlDepth: Length;
+  /** Square-cornered (rounded a little) or round: an oval, a circle when as wide as deep. */
+  shape: 'rectangle' | 'oval';
+  /** Two bowls side by side, the left one this share of the width (0.5 equal, 0.6 a 60/40). Left out: one bowl. */
+  double?: { leftShare: number };
+  /** Its centre's distance right of the cabinet's middle (negative: left). Left out: centred. */
+  offset?: Length;
+  /** Faucet holes cut through the top behind it: one, or three that far apart from the outer holes' centres. Left out: none. */
+  faucet?: { holes: 1 | 3; spread?: Length };
+  /** A farmhouse sink's apron: how tall it is, and how far its face stands in front of the doors' faces. */
+  apron?: { height: Length; proud: Length };
 }
 
 /** What a block under a sink is: it names it and gives a new one its starting size. */
@@ -687,6 +718,8 @@ export interface CabinetOwn {
   topSupport?: { cornerBlocks?: boolean; crossStretchers?: { apart: Length } };
   /** What it is fitted out with inside, behind its doors (organizers): what is in the way, and the trays and shelves made to go round it. */
   inside?: CabinetInside;
+  /** A sink over it, set in the top that lies over it (`src/design/sinks.ts`). Left out: none. A base cabinet's only. */
+  sink?: CabinetSink;
   /** Set: its case is already there, measured. Left out: the case is made here. */
   existing?: ExistingCase;
   /**

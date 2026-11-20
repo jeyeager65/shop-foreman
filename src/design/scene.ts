@@ -39,7 +39,7 @@ export interface ProjectScene {
   faces: Record<string, PartFinishes>;
   slides: SlideMount[];
   casters: { cabinetId: string; x: number; behind: number; locking: boolean; caster: Caster }[];
-  appliances: { partId: string; kind: ApplianceKind; kick?: { height: number; face: number } }[];
+  appliances: { partId: string; kind: ApplianceKind | 'sink'; kick?: { height: number; face: number } }[];
   looks: Record<string, NonNullable<MaterialGroup['look']>>;
 }
 
@@ -123,7 +123,7 @@ export function projectScene(project: Project, shop: Shop, groups?: MaterialGrou
       casters,
       appliances: [
         ...blocks.map((a) => ({ partId: a.part.id, kind: kindOf.get(a.id)!, ...(a.kick ? { kick: a.kick } : {}) })),
-        ...parts.filter((p) => p.id.includes('/appliance-') && p.id.endsWith('/shape')).map((p) => ({ partId: p.id, kind: 'sink' as const })),
+        ...parts.filter((p) => p.id.includes('/appliance-sink-') && p.id.endsWith('/shape')).map((p) => ({ partId: p.id, kind: 'sink' as const })),
       ],
       looks: Object.fromEntries(
         materials.flatMap((m) => {

@@ -82,6 +82,7 @@ export * from './standsOn';
 export * from './doorRacks';
 export * from './underSink';
 export * from './falseFront';
+export * from './sinks';
 export * from './pattern';
 export * from './patternLooks';
 export * from './tileDrawings';

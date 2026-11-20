@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { applianceFootprint, applianceShapes, appliancesOf, inRoom, partBox, isApplianceShape, backAgainstWall, cabinetBack, cabinetIdOf, cabinetPlaces, cabinetsOf, deriveCabinetParts, shownTopParts, stainedWithoutGrain, topPieces } from '@/design';
+import { applianceFootprint, applianceShapes, appliancesOf, inRoom, partBox, isApplianceShape, backAgainstWall, cabinetBack, cabinetIdOf, cabinetPlaces, cabinetsOf, deriveCabinetParts, designsOf, shownTopParts, stainedWithoutGrain, topPieces } from '@/design';
 import { buildJob } from '@/job/buildJob';
 import { createStarterShop } from '@/libraries';
 import type { PlanWarning } from '@/model';
@@ -56,7 +56,11 @@ describe('the home kitchen sample', () => {
   });
 
   it('has its appliances: drawn as blocks where they stand, never made', () => {
-    expect(appliancesOf(project).map((a) => a.kind)).toEqual(['refrigerator', 'dishwasher', 'range', 'microwave', 'sink']);
+    expect(appliancesOf(project).map((a) => a.kind)).toEqual(['refrigerator', 'dishwasher', 'range', 'microwave']);
+    // The sink is the sink base's, its drawer fronts false fronts.
+    const sinkBase = cabinetsOf(project).find((c) => c.name === 'Sink base')!;
+    expect(sinkBase.sink?.mount).toBe('dropIn');
+    expect(designsOf(project).filter((d) => d.template === 'drawer' && d.mounting.openingId.startsWith(`${sinkBase.id}/`)).map((d) => d.template === 'drawer' && !!d.falseFront)).toEqual([true, true]);
     const blocks = applianceShapes(project, project.materials[0]!.id);
     expect(blocks).toHaveLength(4);
     // The fridge against the fridge wall: its front 31" out, facing the room.
@@ -72,7 +76,7 @@ describe('the home kitchen sample', () => {
   it('keeps its appliances through export and import', () => {
     const file = parseProjectFile(serializeProjectFile(exportProject(project, shop)));
     expect(file.project).toEqual(project);
-    expect(appliancesOf(file.project)).toHaveLength(5);
+    expect(appliancesOf(file.project)).toHaveLength(4);
   });
 
   it('runs the window wall\'s top over the dishwasher to a joint, and stops tops at the range and the fridge', () => {

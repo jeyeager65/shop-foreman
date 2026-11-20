@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { SINK_RIM, addAppliance, cabinetsOf, isApplianceShape, shownTopParts, sinkCuts, sinkShapes, starterTopSettings, topPieces } from '@/design';
+import { SINK_RIM, cabinetsOf, sinkProblems, isApplianceShape, shownTopParts, sinkCuts, sinkShapes, starterTopSettings, topPieces } from '@/design';
 import { loadGCodeTools } from '@/gcode/gcodeTools';
 import { buildChecklistSections } from '@/job/checklist';
 import { buildJob } from '@/job/buildJob';
@@ -11,23 +11,23 @@ import { createBaseCabinetProject, createHomeKitchenProject, createShopTableProj
 import { len } from '@/units';
 import { lowRiderJobShop } from './lowRider';
 
-/** A sink: an appliance set in a top, its opening a real cut-out. */
+/** A sink: its cabinet's, set in the top over it, its opening a real cut-out. */
 const shop = lowRiderJobShop();
 const inch = (mm: number) => Math.round((mm / 25.4) * 100) / 100;
 
-/** A 36" base cabinet against the back wall under a top made here, a 24" × 16" sink in it. */
-function sinkCabinet(): Project {
+/** A 36" base cabinet against the back wall under a top made here, a 24" × 16" sink in it; oom: in a room or not. */
+function sinkCabinet(room = true): Project {
   const project = createBaseCabinetProject('frameless', 'doors');
   const context = project.context as CasesContext;
-  context.room = { length: len('120"'), width: len('120"'), ceiling: len('96"') };
+  if (room) context.room = { length: len('120"'), width: len('120"'), ceiling: len('96"') };
   const stored = context.pieces[0]!;
   stored.size.width = len('36"');
-  stored.placement = { wall: 'back', along: len('12"') };
+  if (room) stored.placement = { wall: 'back', along: len('12"') };
   stored.top = {};
   context.tops = starterTopSettings();
   expect(project.materials.some((m) => m.id === SOLID_WOOD_3_4_ID)).toBe(true);
   project.plan.blank.stock = { width: len('48"'), height: len('48"') };
-  addAppliance(project, 'sink', { wall: 'back', along: len('18"') }, { width: '24"', depth: '16"', height: '8"' });
+  stored.sink = { mount: 'dropIn', width: len('24"'), depth: len('16"'), bowlDepth: len('8"'), shape: 'rectangle' };
   return project;
 }
 
@@ -104,7 +104,31 @@ describe('a sink in a top made here', () => {
     const bare = sinkCabinet();
     delete (bare.context as CasesContext).pieces[0]!.top;
     expect(sinkCuts(bare, topPieces(bare, bare.materials))).toEqual([]);
+    expect(sinkProblems(bare, cabinetsOf(bare)[0]!, bare.materials, String)[0]).toMatch(/No top lies over this cabinet/);
     expect(buildJob(bare, shop).cabinetParts.some((p) => p.features.some((f) => f.kind === 'cutout' && f.inside))).toBe(false);
+  });
+});
+
+describe('a sink with no room', () => {
+  it('is cut in its cabinet\'s own top just the same, centred on the cabinet', () => {
+    const project = sinkCabinet(false);
+    const [cut] = sinkCuts(project, topPieces(project, project.materials));
+    expect(inch(cut!.x1 - cut!.x0)).toBeCloseTo(24 - (2 * SINK_RIM) / 25.4, 2);
+    expect(inch((cut!.x0 + cut!.x1) / 2)).toBe(18);
+    const job = buildJob(project, shop);
+    expect(job.cabinetParts.find((p) => p.name === 'Countertop')!.features.some((f) => f.kind === 'cutout' && f.inside)).toBe(true);
+    expect(sinkShapes(project, project.materials, shop.hardware)).toHaveLength(1);
+    expect(sinkProblems(project, cabinetsOf(project)[0]!, project.materials, String)).toEqual([]);
+  });
+
+  it('moves with its offset, and says when its bowl is wider than the case', () => {
+    const project = sinkCabinet(false);
+    const stored = (project.context as CasesContext).pieces[0]!;
+    stored.sink!.offset = len('3"');
+    const [cut] = sinkCuts(project, topPieces(project, project.materials));
+    expect(inch((cut!.x0 + cut!.x1) / 2)).toBe(21);
+    stored.sink!.width = len('36"');
+    expect(sinkProblems(project, cabinetsOf(project)[0]!, project.materials, String).some((w) => /does not fit between the case sides/.test(w))).toBe(true);
   });
 });
 

@@ -16,7 +16,7 @@ import { addAppliance } from '@/design/appliances';
 import { doorHandleChoice } from '@/design/handles';
 import { frontOf, starterTopSettings } from '@/design/tops';
 import { PROJECT_VERSION } from '@/model';
-import type { CabinetDesign, CabinetForm, ConstructionStyle, DesignedCabinetContext, DoorSettings, DrawerSettings, Id, Length, Project, StoredCabinet, StoredDoorSet, StoredDrawer, StoredPiece } from '@/model';
+import type { CabinetDesign, CabinetSink, CabinetForm, ConstructionStyle, DesignedCabinetContext, DoorSettings, DrawerSettings, Id, Length, Project, StoredCabinet, StoredDoorSet, StoredDrawer, StoredPiece } from '@/model';
 import { len } from '@/units';
 import { storedCases } from '@/design/settings';
 
@@ -266,6 +266,11 @@ export function setupExample(project: Project, own: { top?: boolean } = {}): Pro
 }
 
 /** The stored cabinets of a project of designed cabinets: the pieces that are cases, to read. A piece is added, moved or taken out in `piecesIn`. */
+/** A kitchen's sink: a drop-in 33" × 22", two equal bowls 9" deep. */
+export function kitchenSink(): CabinetSink {
+  return { mount: 'dropIn', width: len('33"'), depth: len('22"'), bowlDepth: len('9"'), shape: 'rectangle', double: { leftShare: 0.5 } };
+}
+
 function storedCabinets(project: Project): StoredCabinet[] {
   return storedCases({ pieces: piecesIn(project) });
 }
@@ -699,7 +704,8 @@ export function createCommonKitchenProject(): Project {
   addAppliance(project, 'range', { wall: 'back', along: inch(F + 54) });
   addAppliance(project, 'microwave', { wall: 'back', along: inch(F + 54) }, { offFloor: '55-1/2"' });
   addAppliance(project, 'dishwasher', { wall: 'right', along: inch(sinkEnd) });
-  addAppliance(project, 'sink', { wall: 'right', along: inch(runFront + (36 - 33) / 2) });
+  // The sink, centred on its 36" base: a drop-in, two bowls.
+  stored(sink.id).sink = kitchenSink();
   // A window over the sink, centred on it: 28" wide (its trim and sill are wider, and stay clear of the uppers each side), its sill at 42", 36" tall.
   context.room.windows = [{ wall: 'right', along: inch(runFront + 18 - 14), width: inch(28), height: inch(36), sill: inch(42) }];
   // How the room looks: white subway tile between the tops and the uppers, round the window, and pale blue walls.
@@ -866,8 +872,9 @@ export function createHomeKitchenProject(): Project {
   // The window over the sink, centred on it between the uppers: 28" wide (at 34" it was
   // too wide; its trim and sill are wider than it, and ran behind the upper beside it), its sill at 42", 36" tall.
   context.room.windows = [{ wall: 'right', along: inch(runFront + 36 - 14), width: inch(28), height: inch(36), sill: inch(42) }];
-  // The sink, centred on its 36" base (which starts 18" along the window wall's run).
-  addAppliance(project, 'sink', { wall: 'right', along: inch(runFront + 18 + (36 - 33) / 2) });
+  // The sink, centred on its 36" base: a drop-in, two bowls. The drawer fronts over its doors are false fronts.
+  stored(sink.id).sink = kitchenSink();
+  for (const d of project.designObjects) if (d.template === 'drawer' && d.mounting.openingId.startsWith(`${sink.id}/`)) d.falseFront = {};
 
   // Cut from half sheets: its widest door is 28" across with its grain up and down, too wide for a quarter sheet.
   // (Full sheets plan too, and take the planner longer on a job this size.)

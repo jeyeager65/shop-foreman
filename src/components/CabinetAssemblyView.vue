@@ -71,7 +71,7 @@ const props = withDefaults(
      */
     casters?: { cabinetId: string; x: number; behind: number; locking: boolean; caster: Caster }[];
     /** What each appliance's block is, by its part: its doors, handles, burners and the like are drawn on it. */
-    appliances?: { partId: string; kind: ApplianceKind; /** A dishwasher's toe kick under its block: how high, and its face's distance from the wall. */ kick?: { height: number; face: number } }[];
+    appliances?: { partId: string; kind: ApplianceKind | 'sink'; /** A dishwasher's toe kick under its block: how high, and its face's distance from the wall. */ kick?: { height: number; face: number } }[];
     /**
      * How each material looks bare, by its id: its type's colour, and wood grain, OSB's strands or nothing on
      * it. The realistic look draws a part as its material; the plain one keeps its colours by what the part is.
@@ -1304,7 +1304,7 @@ function addHinges(door: THREE.Group, part: PlacedPart, source: Part) {
  * from its back (0) to its front (its depth). A sink's basin lies flat instead: X across it, Y from
  * its front edge to its back, Z up from the bowl's floor to just under the top's surface.
  */
-function addApplianceLook(block: THREE.Group, kind: ApplianceKind, size: { width: number; height: number; thickness: number }, kick?: { height: number; face: number }) {
+function addApplianceLook(block: THREE.Group, kind: ApplianceKind | 'sink', size: { width: number; height: number; thickness: number }, kick?: { height: number; face: number }) {
   const { width: w, height: h, thickness: d } = size;
   const box = (bw: number, bh: number, bd: number, material: THREE.Material, x: number, y: number, z: number) => {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), material);

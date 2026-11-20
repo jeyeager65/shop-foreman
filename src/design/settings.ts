@@ -13,7 +13,7 @@ export const SETTING_KEYS = ['construction', 'materials', 'faceFrame', 'frameles
 export type SettingKey = (typeof SETTING_KEYS)[number];
 
 /** What only some cabinets have: left out of a copy of the view when the cabinet has none. */
-const OPTIONAL_OWN_KEYS = ['offFloor', 'placement', 'corner', 'top', 'backFiller', 'topSupport', 'inside', 'existing', 'frameOverhang', 'insideFinish', 'caseTop', 'noBack', 'noBottom', 'cables', 'hub', 'rod', 'spans', 'onTop'] as const satisfies readonly (keyof CabinetOwn)[];
+const OPTIONAL_OWN_KEYS = ['offFloor', 'placement', 'corner', 'top', 'backFiller', 'topSupport', 'inside', 'sink', 'existing', 'frameOverhang', 'insideFinish', 'caseTop', 'noBack', 'noBottom', 'cables', 'hub', 'rod', 'spans', 'onTop'] as const satisfies readonly (keyof CabinetOwn)[];
 const OWN_KEYS = ['id', 'name', 'form', 'size', 'sides', 'adjustableShelves', 'layout', 'quantity'] as const satisfies readonly (keyof CabinetOwn)[];
 
 /**

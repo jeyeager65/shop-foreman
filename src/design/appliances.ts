@@ -20,12 +20,7 @@ export const APPLIANCE_KINDS: { kind: ApplianceKind; title: string; size: [strin
   { kind: 'dishwasher', title: 'Dishwasher', size: ['24"', '34"', '24"'] },
   { kind: 'range', title: 'Range', size: ['30"', '36"', '26"'] },
   { kind: 'microwave', title: 'Microwave, over the range', size: ['30"', '16-1/2"', '16"'], offFloor: '54"' },
-  // A drop-in sink: its rim 33" × 22", its bowl 9" deep.
-  { kind: 'sink', title: 'Sink, set in the top', size: ['33"', '9"', '22"'] },
 ];
-
-/** Whether it is set in a top, not standing in the room: a sink. Its place says where along the wall; its top says how high. */
-export const inTop = (appliance: Pick<Appliance, 'kind'>): boolean => appliance.kind === 'sink';
 
 /** Whether a top can run over it: only a dishwasher stands under the counter. */
 export const underCounter = (appliance: Pick<Appliance, 'kind'>): boolean => appliance.kind === 'dishwasher';
@@ -74,7 +69,7 @@ export function applianceFootprint(project: Project, appliance: Appliance): [num
 
 /** The id of the block an appliance is drawn as. */
 export const applianceShapeId = (applianceId: string) => `${applianceId}/shape`;
-/** Whether a part is an appliance's block (or a sink's basin, its top's cabinet's part): drawn in metal, never cut. */
+/** Whether a part is an appliance's block (or a block in the way under a sink): drawn in metal, never cut. */
 export const isApplianceShape = (partId: string) => partId.includes('appliance-') && partId.endsWith('/shape');
 
 /**
@@ -99,8 +94,7 @@ export function applianceKick(project: Project, appliance: Appliance): { height:
 export function applianceShapes(project: Project, materialId: string): { id: string; at: Vec3; turn: number; part: Part; kick?: { height: number; face: number } }[] {
   return appliancesOf(project).flatMap((appliance) => {
     const place = appliancePlace(project, appliance);
-    // A sink is drawn in its top (`sinkShapes` in `tops.ts`).
-    if (!place || inTop(appliance)) return [];
+    if (!place) return [];
     const kick = applianceKick(project, appliance);
     const { width, depth } = appliance.size;
     const height = { mm: appliance.size.height.mm - (kick?.height ?? 0) };

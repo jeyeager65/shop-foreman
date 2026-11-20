@@ -15,7 +15,9 @@ describe('the common kitchen', () => {
   const context = project.context as DesignedCabinetContext;
 
   it('has a fridge, a range under a microwave, a dishwasher and a sink under a window', () => {
-    expect((context.appliances ?? []).map((a) => a.kind).sort()).toEqual(['dishwasher', 'microwave', 'range', 'refrigerator', 'sink']);
+    expect((context.appliances ?? []).map((a) => a.kind).sort()).toEqual(['dishwasher', 'microwave', 'range', 'refrigerator']);
+    // The sink is the sink base's, not the room's.
+    expect(cabinetsOf(project).find((c) => c.name === 'Sink base')!.sink?.mount).toBe('dropIn');
     expect(context.room?.windows).toHaveLength(1);
     const [range, microwave] = ['range', 'microwave'].map((kind) => context.appliances!.find((a) => a.kind === kind)!);
     expect(microwave!.placement).toEqual(range!.placement);

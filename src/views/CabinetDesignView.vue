@@ -104,6 +104,11 @@ import {
   shownTopParts,
   applianceShapes,
   sinkShapes,
+  SINK,
+  SINK_MOUNTS,
+  newSink,
+  sinkProblems,
+  sinkWords,
   takesTopSupport,
   takesNoBack,
   shelfWarnings,
@@ -147,8 +152,6 @@ import {
   MOUNTINGS,
   trayMounting,
   deriveWayIn,
-  sinkCuts,
-  inTop,
   applianceFootprint,
   addAppliance,
   APPLIANCE_KINDS,
@@ -489,7 +492,19 @@ const pocketLooked = (parts: Part[]) => {
   // With the ledges the job cuts round the pockets that get a printed cover.
   return withPocketLooks(parts, store.project!.plan, job?.plan.parts, job ? pocketLedgesOf(job.plan.operations, store.jobShop.tools) : undefined);
 };
-const drawnParts = computed(() => [...own(derived.value.shell), ...allParts.value, ...susanRims.value]);
+/**
+ * A bought or measured top over this cabinet, and its sink, drawn with it (a top is its first cabinet's part, so a
+ * cabinet on its own, as a vanity, has them): only drawn, never cut.
+ */
+const topShapes = computed(() => {
+  if (derived.value.error) return [];
+  try {
+    return [...shownTopParts(store.project!, store.materials, store.shop.hardware), ...sinkShapes(store.project!, store.materials, store.shop.hardware)].filter((p) => p.designObjectId === cabinet.value.id);
+  } catch {
+    return [];
+  }
+});
+const drawnParts = computed(() => [...own(derived.value.shell), ...allParts.value, ...susanRims.value, ...topShapes.value]);
 /**
  * An existing case: the cabinet is already there and is measured here; nothing of its case
  * is made. The switch measures the cabinet as it is now, so nothing moves until a measurement is typed.
@@ -623,7 +638,7 @@ const applianceBlocks = computed(() => (store.materials[0] ? applianceShapes(sto
 const applianceLooks = computed(() => {
   const kindOf = new Map(appliances.value.map((a) => [a.id, a.kind]));
   const blocks = applianceBlocks.value.map((a) => ({ partId: a.part.id, kind: kindOf.get(a.id)!, ...(a.kick ? { kick: a.kick } : {}) }));
-  const basins = wholeProject.value ? projectParts.value.filter((p) => p.id.includes('/appliance-') && p.id.endsWith('/shape')).map((p) => ({ partId: p.id, kind: 'sink' as const })) : [];
+  const basins = (wholeProject.value ? projectParts.value : topShapes.value).filter((p) => p.id.includes('/appliance-sink-') && p.id.endsWith('/shape')).map((p) => ({ partId: p.id, kind: 'sink' as const }));
   return [...blocks, ...basins];
 });
 /** With a room the whole project is worth showing even with one cabinet: it stands in the room. */
@@ -727,11 +742,37 @@ const planAppliances = computed(() =>
     return foot ? [{ id: a.id, name: a.name, points: foot.map((p) => p.join(',')).join(' ') }] : [];
   }),
 );
-/** The sinks with no top under them: their opening has nowhere to be cut. */
-const sinksWithoutTop = computed(() => {
-  const cut = new Set(sinkCuts(store.project!, topPieces(store.project!, store.materials)).map((c) => c.applianceId));
-  return new Set(appliances.value.filter((a) => inTop(a) && !cut.has(a.id)).map((a) => a.id));
-});
+/** The cabinet's sink: on with one that suits its size, off with none. */
+const setCabinetSink = (on: boolean) => {
+  if (on) cabinet.value.sink = newSink(cabinet.value);
+  else delete cabinet.value.sink;
+};
+/** The kinds offered: a drop-in, and the kind the sink is. */
+const sinkMounts = computed(() => SINK_MOUNTS.filter((m) => m.value === 'dropIn' || m.value === cabinet.value.sink?.mount));
+const SINK_SHAPES = [
+  { title: 'Square or rectangle', value: 'rectangle' },
+  { title: 'Round or oval', value: 'oval' },
+];
+const SINK_BOWLS = [
+  { title: 'One bowl', value: 'one' },
+  { title: 'Two, equal', value: 'equal' },
+  { title: 'Two, 60/40', value: '60/40' },
+];
+const sinkBowls = computed(() => (!cabinet.value.sink?.double ? 'one' : cabinet.value.sink.double.leftShare > 0.55 ? '60/40' : 'equal'));
+const setSinkBowls = (value: string) => {
+  const sink = cabinet.value.sink;
+  if (!sink) return;
+  if (value === 'one') delete sink.double;
+  else sink.double = { leftShare: value === '60/40' ? 0.6 : 0.5 };
+};
+const setSinkOffset = (value: Length | null) => {
+  const sink = cabinet.value.sink;
+  if (!sink) return;
+  if (value && Math.abs(value.mm) > 0.01) sink.offset = value;
+  else delete sink.offset;
+};
+/** What is wrong with the sink: no top over it, a bowl wider than the case. */
+const sinkProblemList = computed(() => (cabinet.value.sink ? sinkProblems(store.project!, cabinet.value, store.materials, L.value) : []));
 const WALLS = [
   { title: 'Back wall', value: 'back' },
   { title: 'Left wall', value: 'left' },
@@ -1365,6 +1406,7 @@ const topics = computed((): Topic[] => {
       show: !existing.value,
     },
     { id: 'openings', group: THIS, title: 'Openings', summary: openingsSummary.value, words: 'Its layout, its bays, the height of each row, its shelves, and what is under its top.', show: true },
+    { id: 'sink', group: THIS, title: 'Sink', summary: c.sink ? sinkWords(c.sink, L.value) : 'None', words: 'A sink over it, set in the top over it: its kind, its size and where it sits.', show: c.form === 'base' },
     { id: 'fronts', group: THIS, title: 'Fronts', summary: frontsSummary.value, words: 'Its doors and drawers.', subs: frontSubs.value, show: frontSubs.value.length > 0 },
     {
       id: 'inside',
@@ -1406,7 +1448,7 @@ const warnings = computed((): Record<string, number> => ({
     : (sinkError.value ? 1 : 0) + wayIn.value.filter((w) => w.how === 'no').length + (underSink.value?.doorRacks?.weight.heavy ? 1 : 0) + (cabinet.value.adjustableShelves > 0 ? 1 : 0),
   run: fit.value && fit.value.leftOver < -0.5 ? 1 : 0,
   room: layoutWarnings.value.length + casterLoad.value.length + tooTall.value.length,
-  appliances: sinksWithoutTop.value.size,
+  sink: sinkProblemList.value.length,
 }));
 const foldAsked = String(route.query.fold ?? '').split(',').filter(Boolean);
 const frontAsked = foldAsked.find((f) => /^(doors|drawer):/.test(f));
@@ -2187,31 +2229,51 @@ function notes(part: Part): string[] {
         </HelpText>
       </div>
 
+      <div v-show="nav.current.id === 'sink'" data-test="topic-sink">
+        <v-switch :model-value="!!cabinet.sink" label="A sink over it" color="primary" density="compact" hide-details data-test="sink-on" @update:model-value="setCabinetSink(!!$event)" />
+        <template v-if="cabinet.sink">
+          <v-row density="compact">
+            <v-col cols="12"><v-select v-model="cabinet.sink.mount" label="Kind" :items="sinkMounts" hide-details data-test="sink-mount" /></v-col>
+            <v-col cols="6"><v-select v-model="cabinet.sink.shape" label="Shape" :items="SINK_SHAPES" hide-details data-test="sink-shape" /></v-col>
+            <v-col cols="6"><v-select :model-value="sinkBowls" label="Bowls" :items="SINK_BOWLS" hide-details data-test="sink-bowls" @update:model-value="setSinkBowls" /></v-col>
+            <v-col cols="4"><LengthField v-model="cabinet.sink.width" label="Width" /></v-col>
+            <v-col cols="4"><LengthField v-model="cabinet.sink.depth" label="Front to back" /></v-col>
+            <v-col cols="4"><LengthField v-model="cabinet.sink.bowlDepth" label="Bowl depth" /></v-col>
+            <v-col cols="6"><LengthField :model-value="cabinet.sink.offset ?? len('0')" label="Right of centre" data-test="sink-offset" @update:model-value="setSinkOffset" /></v-col>
+          </v-row>
+          <v-alert v-for="w in sinkProblemList" :key="w" type="warning" variant="tonal" density="compact" class="mt-2" data-test="sink-problem">{{ w }}</v-alert>
+          <HelpText>
+            The sink is the cabinet's: it is set in whatever top lies over the cabinet (the run's, its own, an island's), with or
+            without a room. Its sizes are the maker's, outside: the rim of a drop-in, the bowl of an undermount. A drop-in's opening
+            is {{ L(SINK.rim) }} inside its rim each side, an undermount's {{ L(SINK.flange) }} inside its outside (both tune me).
+            It sits across the cabinet where it says, and front to back in the middle of the top over the cabinet. The CNC cuts the
+            opening in a top made here; in a bought top it is cut by hand, in a measured one by the supplier. Its bowl is in the way
+            under it, for what is fitted out inside.
+          </HelpText>
+        </template>
+      </div>
+
       <div v-if="context.room" v-show="nav.current.id === 'appliances'" data-test="topic-appliances">
         <div v-for="a in appliances" :key="a.id" class="mb-3" :data-test="`appliance-${a.id}`">
           <v-row density="compact" class="align-center">
             <v-col cols="7"><v-text-field v-model="a.name" label="Name" density="compact" hide-details /></v-col>
             <v-col cols="5" class="text-right"><v-btn variant="text" color="error" size="small" @click="removeAppliance(a.id)">Remove</v-btn></v-col>
             <v-col cols="4"><LengthField v-model="a.size.width" label="Width" /></v-col>
-            <v-col cols="4"><LengthField v-model="a.size.height" :label="inTop(a) ? 'Bowl depth' : 'Height'" /></v-col>
-            <v-col cols="4"><LengthField v-model="a.size.depth" :label="inTop(a) ? 'Front to back' : 'Depth'" /></v-col>
+            <v-col cols="4"><LengthField v-model="a.size.height" label="Height" /></v-col>
+            <v-col cols="4"><LengthField v-model="a.size.depth" label="Depth" /></v-col>
             <template v-if="a.placement.wall !== 'free'">
               <v-col cols="6"><v-select :model-value="applianceWall(a)" :items="WALLS" label="Against" density="compact" hide-details @update:model-value="setApplianceWall(a, $event)" /></v-col>
               <v-col cols="6"><LengthField v-model="a.placement.along" label="From the wall's left end" /></v-col>
             </template>
           </v-row>
-          <v-alert v-if="sinksWithoutTop.has(a.id)" type="warning" variant="tonal" density="compact" class="mt-1" :data-test="`sink-no-top-${a.id}`">
-            No top lies under this sink: its opening is not cut. Put it over a run or a cabinet that has a countertop.
-          </v-alert>
         </div>
         <div class="d-flex flex-wrap ga-2">
           <v-btn v-for="k in APPLIANCE_KINDS" :key="k.kind" variant="tonal" color="primary" size="small" :data-test="`add-appliance-${k.kind}`" @click="addApplianceOf(k.kind)">Add a {{ k.title.split(',')[0]!.toLowerCase() }}</v-btn>
         </div>
         <HelpText>
           Generic appliances standing in the room: a size and a place, drawn in the whole-project view. Nothing is made for one. A
-          top beside a dishwasher runs on over it; beside a range or a refrigerator it stops at its cabinet's side. A sink is set
-          in the top over where it stands: its opening, a little smaller than its rim, is cut through that top (by the CNC in a
-          top made here, by hand in a bought one), centred front to back. The sizes are typical ones (tune me): measure yours.
+          top beside a dishwasher runs on over it; beside a range or a refrigerator it stops at its cabinet's side. A sink is not
+          one: it is its cabinet's, under the cabinet's Sink topic. The sizes are typical ones (tune me): measure yours.
         </HelpText>
       </div>
 
