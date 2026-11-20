@@ -1,0 +1,14 @@
+// Cloudflare Workers: the app is static files (Vite's `dist`), served at one address only.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "shop-foreman",
+  "compatibility_date": "2026-06-01",
+  "assets": {
+    "directory": "./dist"
+  },
+  // Saved projects live in the browser under the page's address, so the app has one address: no workers.dev
+  // address and no preview addresses beside it.
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "shopforeman.yeager.dev", "custom_domain": true }]
+}
