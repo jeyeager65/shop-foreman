@@ -1,0 +1,180 @@
+[
+  {
+    "id": "cabinets",
+    "title": "Cabinets",
+    "words": "One cabinet, and what can be done with it.",
+    "samples": [
+      { "id": "cabinet", "under": "Construction", "title": "A frameless cabinet", "what": "A base cabinet, a drawer over doors.", "href": "/?sample=cabinet#/design" },
+      { "id": "faceframe", "under": "Construction", "title": "A face frame cabinet", "what": "The same in face frame, with its doors.", "href": "/?sample=faceframe#/design" },
+      { "id": "three-drawers", "under": "Construction", "title": "A bank of three drawers", "what": "Frameless, drawers only.", "href": "/?sample=cabinet&layout=drawers&drawers=3#/design" },
+      { "id": "bays-frameless", "under": "Construction", "title": "Two bays, frameless", "what": "48\" wide, a partition between the bays.", "href": "/?sample=cabinet&width=48&bays=2#/design?view=3d&open=70" },
+      { "id": "bays-faceframe", "under": "Construction", "title": "Two bays, face frame", "what": "48\" wide, a mullion between the bays and a partition behind it.", "href": "/?sample=faceframe&width=48&bays=2#/design?view=3d&open=70" },
+      { "id": "frame-overhang", "under": "Construction", "title": "A face frame that overhangs its sides", "what": "A face frame cabinet whose frame stands 1/4\" past each side of the box, as factory cabinets do: the cabinet is as wide as its frame, the box behind is 1/2\" narrower.", "href": "/?sample=faceframe&overhang=0.25#/design?view=3d&explode=30" },
+      { "id": "tall-and-wall", "under": "Construction", "title": "A base, a tall and a wall cabinet", "what": "Frameless, a tall cabinet and a wall cabinet on rails added.", "href": "/?sample=cabinet&tall=1&wall=rails&sheet=48x96#/design?all=1" },
+      { "id": "vanity-top-support", "under": "Construction", "title": "More under a vanity top", "what": "A 36\" face frame vanity: corner blocks and cross stretchers under the top.", "href": "/?sample=faceframe&layout=doors&width=36&depth=22.5&sink=none&support=both#/design?view=3d&explode=40" },
+      { "id": "lazy-susan", "under": "Corners and lazy susans", "title": "An L-shaped corner cabinet", "what": "The frameless cabinet as an L-shaped corner, left.", "href": "/?sample=cabinet&corner=1:lshaped-left#/design?view=3d" },
+      { "id": "susan-bearings", "under": "Corners and lazy susans", "title": "A lazy susan on bearing rings", "what": "An L-shaped corner cabinet with two pie-cut shelves cut on the CNC, each on a bought bearing ring, the upper one on a fixed shelf. The rim is a strip of 1/4\" plywood slotted to bend, in a groove round the shelf.", "href": "/?sample=cabinet&corner=1:lshaped-left&susan=bearings#/design?view=3d&open=120" },
+      { "id": "susan-pole", "under": "Corners and lazy susans", "title": "A lazy susan on a pole", "what": "A diagonal corner cabinet with two whole round shelves on a bought pole, turning together. The rim is two strips of 1/8\" hardboard, one inside the other.", "href": "/?sample=cabinet&corner=1:diagonal-left&susan=pole&rim=laminated#/design?view=3d&open=120" },
+      { "id": "susan-doors", "under": "Corners and lazy susans", "title": "A lazy susan with its doors on it", "what": "An L-shaped corner cabinet whose two doors are screwed to the shelves of a lazy susan on a pole, with no hinges: push a door and the whole turns. Move the Doors slider to turn it and see it pass the end sides.", "href": "/?sample=cabinet&corner=1:lshaped-left&susan=pole&susandoors=1#/design?view=3d&open=20" },
+      { "id": "sink-trays", "under": "Under a sink", "title": "Under a sink: two trays", "what": "A 30\" face frame vanity: a roll-out tray on the floor and one above it, cut round the plumbing.", "href": "/?sample=faceframe&layout=doors&width=30&depth=22.5&support=none&sink=tray,upper#/design?view=3d&open=120&drawer=70" },
+      { "id": "sink-tray-shelf", "under": "Under a sink", "title": "Under a sink: a tray and a shelf", "what": "The same vanity: a roll-out tray on the floor, a shelf from side to side above it.", "href": "/?sample=faceframe&layout=doors&width=30&depth=22.5&support=none&sink=tray,shelf#/design?view=3d&open=120&drawer=70" },
+      { "id": "sink-side-trays", "under": "Under a sink", "title": "Under a sink: a 24\" vanity", "what": "24\" wide, 21\" deep, the trap 12\" out from the back: a tray on the floor, a shelf, and a tray on it each side of the plumbing.", "href": "/?sample=faceframe&layout=doors&width=24&depth=21&support=none&sink=tray,sides&trap=5x12x12#/design?view=3d&open=120&drawer=70" },
+      { "id": "sink-obstacles", "under": "Under a sink", "title": "Under a kitchen sink: everything in the way", "what": "A 36\" sink cabinet with its trap, a disposal, the bowl and a supply valve in each back corner measured as blocks: a tray on the floor and a shelf notched round the trap and the disposal.", "href": "/?sample=faceframe&layout=doors&width=36&depth=24&support=none&sink=tray,shelf&trap=6x10x8&bowl=30x16x16&valves=14&disposal=8x8x7#/design?view=3d&open=120&drawer=70" },
+      { "id": "organizers-trays", "under": "Inside: trays, racks, pull-outs", "title": "Three roll-out trays", "what": "No sink: a 24\" frameless base cabinet fitted out behind its doors with a tray on the floor and two above it, at 8\" and 16\".", "href": "/?sample=cabinet&layout=doors&width=24&sink=none&organizers=tray,tray:8,tray:16#/design?view=3d&open=120&drawer=70" },
+      { "id": "base-organizers", "under": "Inside: trays, racks, pull-outs", "title": "A trash pull-out, dividers and a narrow pull-out", "what": "A 36\" frameless base cabinet with no sink: a trash pull-out at the left, vertical dividers for trays and baking sheets in the middle, a narrow pull-out with tall walls at the right.", "href": "/?sample=cabinet&layout=doors&width=36&sink=none&organizers=trash,dividers:15w9,narrow:25#/design?view=3d&open=120&drawer=60" },
+      { "id": "casters", "under": "On casters", "title": "A cabinet on casters", "what": "A frameless cabinet on casters: a pad of the case material under each corner, the caster screwed to it.", "href": "/?sample=cabinet&bottom=casters#/design?view=3d" },
+      { "id": "casters-layer", "under": "On casters", "title": "A cabinet on casters, a doubled bottom", "what": "The same cabinet with a second layer under the whole case for the casters, as a run or an island has.", "href": "/?sample=cabinet&bottom=casters&under=layer#/design?view=3d" }
+    ]
+  },
+  {
+    "id": "room",
+    "title": "Kitchens and rooms",
+    "words": "Runs along the walls, kitchens and islands.",
+    "samples": [
+      { "id": "run-with-top", "under": "Runs and tops", "title": "A run against a wall, with a top", "what": "The cabinet in a run, its left end on a wall, a countertop.", "href": "/?sample=cabinet&run=wall&top=1#/design?all=1" },
+      { "id": "framerun", "under": "Runs and tops", "title": "A face frame run between two walls", "what": "A face frame run between two walls.", "href": "/?sample=framerun#/design?all=1" },
+      { "id": "kitchen", "under": "Kitchens", "title": "A kitchen", "what": "A common layout: an L of two walls and an island. The fridge, a range under a microwave and banks of drawers on one wall; a sink under a window and a dishwasher on the other, round a blind corner; uppers over both. White paint, laminate tops.", "href": "/?sample=kitchen#/design?all=1" },
+      { "id": "home", "under": "Kitchens", "title": "An L-shaped kitchen with a peninsula", "what": "An L of two walls round a blind corner: the window wall with gaps for the fridge, dishwasher and range, a peninsula off the corner, face frame in a dark stain.", "href": "/?sample=home#/design?all=1" },
+      { "id": "island", "under": "Islands", "title": "An island", "what": "Two rows of shop cabinets back to back under one top, free in a 14' × 12' room.", "href": "/?sample=island#/design?all=1" }
+    ]
+  },
+  {
+    "id": "furniture",
+    "title": "Furniture",
+    "words": "Pieces that stand on their own: cases with open shelves, tops of their own, plinths and feet.",
+    "samples": [
+      { "id": "bookcase", "under": "Cases", "title": "A bookcase", "what": "Open shelves behind a face frame, 32\" wide and 72\" high: a fixed shelf half-way up, loose shelves on pins, a plinth, and a top of its own.", "href": "/?starter=bookcase&preset=builtin-face-frame-shaker#/design?view=3d" },
+      { "id": "dresser", "under": "Cases", "title": "A dresser", "what": "Four drawers behind a face frame, 36\" wide: a top panel, a top of its own laid on with a solid wood edge, on bought feet.", "href": "/?starter=dresser&preset=builtin-face-frame-shaker#/design?view=3d" },
+      { "id": "nightstand", "under": "Cases", "title": "A night stand", "what": "A drawer over an open shelf, 20\" wide and 26\" high, under a top of its own, on bought feet.", "href": "/?starter=nightstand&preset=builtin-face-frame-shaker#/design?view=3d" },
+      { "id": "tvstand", "under": "Cases", "title": "A TV stand", "what": "Low and wide, three bays: doors, an open bay for equipment with a cable hole and an air slot through the back, doors. On a frame of legs, under a top of its own.", "href": "/?starter=tvstand&preset=builtin-face-frame-shaker#/design?view=3d" },
+      { "id": "tvstand-inset", "under": "Inset, with solid wood edges", "title": "A TV stand, inset", "what": "The same TV stand in the inset style: a 3/4\" plywood case with a solid wood strip glued to every front edge (the sides, the two partitions, the bottom and the top panel), and slab doors of solid wood set inside it, flush with the strips. No face frame.", "href": "/?starter=tvstand&preset=builtin-furniture-inset#/design?view=3d" },
+      { "id": "nightstand-inset", "under": "Inset, with solid wood edges", "title": "A night stand, inset", "what": "A plywood case with solid wood strips on its front edges. Its drawer has one front piece of solid wood, inset, with the plywood box sides in dados in its back: no doubled front.", "href": "/?starter=nightstand&preset=builtin-furniture-inset#/design?view=3d&drawer=60" },
+      { "id": "nightstand-inset-applied", "under": "Inset, with solid wood edges", "title": "A night stand, inset, an applied drawer front", "what": "The same, its drawer a plain plywood box with a solid wood front of its own screwed on from inside: the front is fitted to its opening after the box is hung.", "href": "/?starter=nightstand&preset=builtin-furniture-inset&front=applied#/design?view=3d&drawer=60" },
+      { "id": "nightstand-inset-tabs", "under": "Inset, with solid wood edges", "title": "A night stand, inset, on blind tabs", "what": "The same night stand with its case on tab-and-slot joints: the slots are pockets in the inside faces, so nothing shows outside and no screw holds the case.", "href": "/?starter=nightstand&preset=builtin-furniture-inset&joint=blindtabs#/design?view=3d&explode=70" },
+      { "id": "closettower", "under": "Closets", "title": "A closet tower", "what": "Tall, open and 16\" deep: three loose shelves above a fixed one, and under it a bought rod to hang shirts and jackets from, on flanges screwed to the sides.", "href": "/?starter=closettower&preset=builtin-frameless-shaker#/design?view=3d" },
+      { "id": "closet", "under": "Closets", "title": "A closet", "what": "A tower of shelves in the middle of the closet and, each side of it, a shelf on cleats and a rod under it reaching 30\" to the wall: only the tower, the two shelves and their cleats are made.", "href": "/?starter=closet&preset=builtin-frameless-shaker#/design?view=3d" },
+      { "id": "dresser-legs", "under": "Cases on legs", "title": "A dresser on legs", "what": "The dresser's case on a frame of four 2×2 legs and four aprons, 6\" off the floor: pocket-screwed together and up into its flat bottom.", "href": "/?starter=dresser-legs&preset=builtin-face-frame-shaker#/design?view=3d" },
+      { "id": "dresser-posts", "under": "Cases on legs", "title": "A wide dresser with corner posts", "what": "Four posts of 2×2 stock from the floor to the top are its corners. The sides stand between them, a quarter inch in; rails lie flat between the front posts and the drawer fronts are inset, flush with them. Two bays of three rows of drawers, the top row two small ones in each bay.", "href": "/?starter=dresser-posts&preset=builtin-furniture-solid#/design?view=3d" },
+      { "id": "chest-posts", "under": "Cases on legs", "title": "A tall chest with corner posts", "what": "The same build 42\" wide and 50\" high: two small drawers over four wide ones between four posts, a rail lying flat between each two, the fronts inset.", "href": "/?starter=chest-posts&preset=builtin-furniture-solid#/design?view=3d" },
+      { "id": "nightstand-legs", "under": "Cases on legs", "title": "A night stand on legs", "what": "A drawer over an open shelf, the case on a frame of legs and aprons.", "href": "/?starter=nightstand-legs&preset=builtin-face-frame-shaker#/design?view=3d" },
+      { "id": "endtable", "under": "Tables", "title": "An end table", "what": "Four legs of 2×2 stock, four aprons pocket-screwed between them and a top with a solid wood edge, 22\" square and 24\" high.", "href": "/?starter=endtable&preset=builtin-face-frame-shaker#/design?view=3d" },
+      { "id": "coffeetable", "under": "Tables", "title": "A coffee table", "what": "The same build 48\" long, 24\" wide and 18\" high: legs, aprons set in from them, a top held down by figure-8 fasteners.", "href": "/?starter=coffeetable&preset=builtin-face-frame-shaker#/design?view=3d" },
+      { "id": "sofatable", "under": "Tables", "title": "A sofa table", "what": "A console to stand behind a sofa: 54\" long, 12\" wide and 30\" high.", "href": "/?starter=sofatable&preset=builtin-face-frame-shaker#/design?view=3d" },
+      { "id": "dropleaftable", "under": "Tables", "title": "A drop-leaf table", "what": "A classic drop-leaf table: narrow, with a 10\" leaf along each long side that folds down on hinges under a square joint, each held up by two swing-out brackets on the apron.", "href": "/?starter=dropleaftable&preset=builtin-face-frame-shaker#/design?view=3d" },
+      { "id": "writingdesk", "under": "Desks", "title": "A writing desk", "what": "A table at a desk's height: four legs, aprons and a top, 48\" long, 24\" wide and 30\" high, open underneath.", "href": "/?starter=writingdesk&preset=builtin-face-frame-shaker#/design?view=3d" },
+      { "id": "desk", "under": "Desks", "title": "A pedestal desk", "what": "A bank of three drawers each side with 28\" of knee space between them, under one top: two cases and a top over both.", "href": "/?starter=desk&preset=builtin-face-frame-shaker#/design?all=1&view=3d" },
+      { "id": "deskhutch", "under": "Desks", "title": "A desk with a hutch", "what": "A writing desk and, standing at the back of its top, a shallow case of open shelves as long as the desk: one piece standing on another.", "href": "/?starter=deskhutch&preset=builtin-face-frame-shaker#/design?piece=table-1&all=1&view=3d" }
+    ]
+  },
+  {
+    "id": "existing",
+    "title": "Existing cabinets",
+    "words": "Cabinets that are measured, not made: new doors and fronts for them, and what goes inside.",
+    "samples": [
+      { "id": "vanity", "under": "New doors and fronts", "title": "New doors for a vanity", "what": "Two shaker doors for a face frame vanity that is already there, only its door opening measured.", "href": "/?sample#/design" },
+      { "id": "existing-refaced", "under": "New doors and fronts", "title": "New doors, and trays inside", "what": "The same cabinet, already there, with new doors made on its measured opening (refacing) and two trays inside.", "href": "/?sample=faceframe&layout=doors&width=24&depth=21&support=none&sink=tray,upper&existing=new#/design?view=3d&open=100&drawer=40" },
+      { "id": "existing-wall", "under": "New doors and fronts", "title": "New doors for a wall cabinet", "what": "A base cabinet and the wall cabinet over it, both already there, with new doors made on their measured openings: nothing else is cut, and nothing to hang the wall cabinet is listed.", "href": "/?sample=faceframe&layout=doors&width=30&support=none&sink=none&existing=new&wallthere=new#/design?all=1&view=3d&open=40" },
+      { "id": "existing-drawer-front", "under": "New doors and fronts", "title": "New doors and a new drawer front", "what": "A cabinet that is already there, a drawer over its doors: new doors and a new drawer front on its measured openings. The drawer's box and slides stay; only the front is made.", "href": "/?sample=faceframe&layout=drawerOverDoors&width=24&support=none&sink=none&existing=new#/design?view=3d" },
+      { "id": "existing-drawer-bank", "under": "New doors and fronts", "title": "New fronts for a bank of drawers", "what": "Three drawers that are already there, frameless: three new fronts and nothing else.", "href": "/?sample=cabinet&layout=drawers&drawers=3&width=18&support=none&sink=none&existing=new#/design?view=3d" },
+      { "id": "existing-vanity", "under": "Fitted out", "title": "A vanity, fitted out", "what": "A 24\" vanity that is already there, measured: drawn as a plain shell, nothing of it cut or bought. A tray on its floor, a shelf, and a tray each side of the plumbing are made for it.", "href": "/?sample=faceframe&layout=doors&width=24&depth=21&support=none&sink=tray,sides&trap=5x12x12&existing=1#/design?view=3d&drawer=70" },
+      { "id": "existing-frame", "under": "Fitted out", "title": "Trays on a frame of their own", "what": "A 30\" cabinet that is already there, with two trays on a self-standing frame: two standards on two rails, squared on the bench and screwed to the cabinet's floor, touching neither side.", "href": "/?sample=faceframe&layout=doors&width=30&depth=22.5&support=none&sink=tray,upper&existing=1#/design?view=3d&drawer=70&explode=40" },
+      { "id": "door-racks", "under": "Fitted out", "title": "Racks on the doors", "what": "A 30\" sink cabinet that is already there, its doors kept (and not drawn): two racks for the inside of each door, standing where they are when the doors are shut, and a tray behind them, set back to clear.", "href": "/?sample=faceframe&layout=doors&width=30&depth=22.5&support=none&sink=tray&racks=2&existing=1#/design?view=3d" },
+      { "id": "kitchen-sink", "under": "Fitted out", "title": "A trash pull-out and a tilt-out tray under a sink", "what": "A 36\" sink cabinet that is already there: a pull-out for a bin on a frame of its own beside the trap, and a tilt-out tray for behind the false front.", "href": "/?sample=faceframe&layout=doors&width=36&depth=24&support=none&sink=bare&trap=6x10x8&organizers=trash&tilt=20x4&existing=1#/design?view=3d&drawer=60" },
+      { "id": "tall-tray", "under": "Fitted out", "title": "A tall tray for bottles", "what": "The same cabinet with one roll-out tray whose walls are 8\" high, cut round the trap.", "href": "/?sample=faceframe&layout=doors&width=36&depth=24&support=none&sink=bare&trap=6x10x8&organizers=tall&existing=1#/design?view=3d&drawer=60" },
+      { "id": "blind-corner", "under": "Fitted out", "title": "A blind corner, fitted out", "what": "A 48\" blind corner cabinet that is already there: its left half is closed (the other wall's cabinets stand in front of it), its right half is the door opening. A roll-out tray in front of the door, and in the blind half a tray on slides that run sideways. Move the Drawers slider: the first tray comes right out, then the blind one slides across into its place, where it can be reached.", "href": "/?sample=cabinet&layout=doors&width=48&depth=24&sink=none&organizers=tray,blind&existing=1&corner=1:blind-left:24#/design?view=3d&drawer=100" },
+      { "id": "blind-corner-bottom-mount", "under": "Fitted out", "title": "A blind corner, its front tray on bottom-mount slides", "what": "The same cabinet with the tray in front of the door on a pair of bottom-mount slides screwed to the floor: nothing stands beside it, so it fills the door opening, and the blind corner tray rides just over the slides, inches lower. Bought slides, and dear: for where they earn their keep.", "href": "/?sample=cabinet&layout=doors&width=48&depth=24&sink=none&organizers=under,blind&existing=1&corner=1:blind-left:24#/design?view=3d&drawer=100" },
+      { "id": "blind-corner-two-trays", "under": "Fitted out", "title": "A blind corner, two blind trays", "what": "Two trays in the blind half, one over the other. Both come across behind the door; the upper one is on a platform and then comes out of the door opening to you. Move the Drawers slider through its four steps: the upper tray across and out with the tray in front of the door in, then that tray out, then the lower blind tray across. It needs the space high in front of the door kept clear.", "href": "/?sample=cabinet&layout=doors&width=48&depth=24&sink=none&organizers=tray,blind,blindout&existing=1&corner=1:blind-left:24#/design?view=3d&drawer=100" },
+      { "id": "measure", "under": "Measuring", "title": "Measuring a cabinet", "what": "The Measure screen: one measurement to a card, each under a picture of what to measure, in one narrow column for a phone held at the cabinet.", "href": "/?sample=faceframe&layout=doors&width=24&depth=21&support=none&sink=tray,sides&trap=5x12x12&existing=new#/measure" }
+    ]
+  },
+  {
+    "id": "shop",
+    "title": "For the shop",
+    "words": "Shop cabinets with inset fronts, and a shop table.",
+    "samples": [
+      { "id": "shop", "under": "Shop cabinets", "title": "A shop cabinet", "what": "Inset fronts, flush with the case.", "href": "/?sample=shop#/design" },
+      { "id": "shop-doors-flat", "under": "Shop cabinets", "title": "A shop cabinet, doors only, flat bottom", "what": "Shop cabinet, doors only, no toe kick.", "href": "/?sample=shop&layout=doors&kick=off#/design" },
+      { "id": "bays-shop", "under": "Shop cabinets", "title": "Two bays, shop style", "what": "48\" wide, shop style.", "href": "/?sample=shop&width=48&bays=2#/design?view=3d&open=70" },
+      { "id": "shop-tabs", "under": "Shop cabinets", "title": "A shop cabinet on tabs and slots", "what": "Three drawers, no screws in the case: tabs on the ends of the bottom and the stretchers go through slots in the sides and show outside, and the drawer boxes have finger-jointed corners. All cut on the CNC and glued.", "href": "/?sample=shop&layout=drawers&kick=off&joint=tabs&box=tabs&front=plain&pull=finger#/design?view=3d&drawer=45" },
+      { "id": "shopwall", "under": "Shop cabinets", "title": "A wall of shop cabinets", "what": "Three shop cabinets in one project.", "href": "/?sample=shopwall#/design?all=1" },
+      { "id": "shopref", "under": "Shop cabinets", "title": "A shop: a bench run, a tall cabinet, a wall run", "what": "Seven cabinets, a bench run with a tall cabinet and a filler, a wall run, in a room.", "href": "/?sample=shopref#/design?all=1" },
+      { "id": "shopref-torsion", "under": "Shop cabinets", "title": "A shop bench under a torsion top", "what": "The shop's bench run and its cabinet on its own, each under a torsion box with 3/4\" skins: against the wall, stopped by the tall cabinet.", "href": "/?sample=shopref&top=bench#/design?all=1" },
+      { "id": "assemblytable", "under": "Shop tables", "title": "An assembly table", "what": "A torsion box for a top on 3×3 legs and aprons: flat and stiff, 60\" long, 30\" wide and 34\" high, with a shelf low down.", "href": "/?starter=assemblytable#/design?view=3d" },
+      { "id": "shoptable", "under": "Shop tables", "title": "A shop table", "what": "A torsion table over cabinets at its two ends, the middle open for a vacuum.", "href": "/?sample=shoptable#/design?all=1" },
+      { "id": "shoptablefold", "under": "Shop tables", "title": "A table for full sheets, with a leaf that folds down", "what": "62\" × 112\", big enough to lay a full sheet on; the back 28\" is a leaf on a hinge, lined up by pins in holes the CNC drills.", "href": "/?sample=shoptablefold#/design?all=1" }
+    ]
+  },
+  {
+    "id": "fronts",
+    "title": "Fronts and finish",
+    "words": "Patterns cut into doors and drawer fronts, handles, paint and stain.",
+    "samples": [
+      { "id": "pattern-chevron", "under": "Patterns", "title": "V-groove chevrons", "what": "Slab doors and a drawer front with chevrons cut by the 90° V-bit. Other layouts: planks, a grid, diamonds.", "href": "/?sample=cabinet&frontstyle=slab&pattern=chevron#/design?view=3d" },
+      { "id": "pattern-flutes", "under": "Patterns", "title": "Flutes in a shaker panel", "what": "Shaker doors and a drawer front whose recessed panels are fluted with a ball nose.", "href": "/?sample=cabinet&frontstyle=shaker&pattern=flutes#/design?view=3d" },
+      { "id": "pattern-frame", "under": "Patterns", "title": "A frame and panel look in V-grooves", "what": "Slab doors and a drawer front with a V-groove rectangle that reads as a frame and a panel, far quicker to cut than a recessed panel.", "href": "/?sample=cabinet&frontstyle=slab&pattern=frame#/design?view=3d" },
+      { "id": "pattern-sunburst", "under": "Patterns", "title": "A V-groove sunburst", "what": "Slab fronts with rays from the bottom, from the corner where a pair's two doors meet. Also rectangles one inside another, and waves.", "href": "/?sample=cabinet&frontstyle=slab&pattern=sunburst#/design?view=3d" },
+      { "id": "pattern-dimples", "under": "Patterns", "title": "Dimples", "what": "Slab fronts with a grid of round dents, each one plunge of a ball nose.", "href": "/?sample=cabinet&frontstyle=slab&pattern=dimples#/design?view=3d" },
+      { "id": "pattern-channels", "under": "Patterns", "title": "Channels, a slat look", "what": "Slab fronts with flat-bottomed channels cut by an end mill; soft-cornered ones take a bull nose. Also reeded and wavy flutes.", "href": "/?sample=cabinet&frontstyle=slab&pattern=channels#/design?view=3d" },
+      { "id": "pattern-ripples", "under": "Patterns", "title": "Ripples, a woven look", "what": "Slab fronts with V-bit lines whose depth rises and falls, each line half a wave on from the one beside it, inside a plain border. With a ball nose the same lines are scallops.", "href": "/?sample=cabinet&frontstyle=slab&pattern=ripples#/design?view=3d" },
+      { "id": "finger-pulls", "under": "Handles and pulls", "title": "Finger pulls cut on the CNC", "what": "Shop cabinet, CNC finger pulls on every front.", "href": "/?sample=shop&pull=finger#/design?view=3d" },
+      { "id": "pulls-and-paint", "under": "Paint and stain", "title": "Pulls and navy paint", "what": "Generic pulls on every front, navy paint.", "href": "/?sample=faceframe&handle=pull&finish=paint-navy#/design?view=3d" }
+    ]
+  },
+  {
+    "id": "screens",
+    "title": "Screens",
+    "words": "Links that open a screen in a given state, for building the app. Not shown on the page.",
+    "hidden": true,
+    "samples": [
+      { "id": "plan-operations", "title": "Plan: operations", "what": "The shop table's operations.", "href": "/?sample=shoptable#/plan?tab=operations" },
+      { "id": "cut-lists", "title": "Cut: lists", "what": "The kitchen's saw cut list, parts, by hand and Kreg.", "href": "/?sample=kitchenref#/cut?lists=1" },
+      { "id": "cut-gcode", "title": "Cut: G-code in 3D", "what": "The shop cabinet's first file.", "href": "/?sample=shop#/cut?view=3d&file=1" },
+      { "id": "build-checklist", "title": "Build: checklist", "what": "The shop table's build steps.", "href": "/?sample=shoptable#/build" },
+      { "id": "build-buy", "title": "Build: what to buy", "what": "The shop reference job's buying list, hardware and finish.", "href": "/?sample=shopref#/build?lists=1" },
+      { "id": "setup-preset", "title": "Setup from a preset", "what": "A new project from the shop preset.", "href": "/#/setup?preset=builtin-shop-inset-slab" },
+      { "id": "shop-bits", "title": "Shop profile: bits", "what": "The bit library: the end mills open, with the 1/4\" end mill's feeds and speeds for each material type.", "href": "/#/shop?bits=endMill&feeds=endmill-1-4" }
+    ]
+  },
+  {
+    "id": "starters",
+    "title": "Starters",
+    "words": "The pictures of the starters (src/samples/starters.ts), one each, made as the samples' are. Not shown on the page.",
+    "hidden": true,
+    "samples": [
+      { "id": "starter-base", "title": "A base cabinet", "what": "The starter, in its usual style.", "href": "/?starter=base#/design?view=3d" },
+      { "id": "starter-drawers", "title": "A bank of drawers", "what": "The starter, in its usual style.", "href": "/?starter=drawers#/design?view=3d" },
+      { "id": "starter-wall", "title": "A wall cabinet", "what": "The starter, in its usual style.", "href": "/?starter=wall#/design?view=3d" },
+      { "id": "starter-tall", "title": "A tall cabinet", "what": "The starter, in its usual style.", "href": "/?starter=tall#/design?view=3d" },
+      { "id": "starter-vanity", "title": "A bathroom vanity", "what": "The starter, in its usual style.", "href": "/?starter=vanity#/design?view=3d&open=110&drawer=60" },
+      { "id": "starter-corner", "title": "A corner cabinet", "what": "The starter, in its usual style.", "href": "/?starter=corner#/design?view=3d" },
+      { "id": "starter-run", "title": "A run along a wall", "what": "The starter, in its usual style.", "href": "/?starter=run#/design?view=3d&all=1" },
+      { "id": "starter-kitchen", "title": "A kitchen", "what": "The starter, in its usual style.", "href": "/?starter=kitchen#/design?view=3d&all=1" },
+      { "id": "starter-island", "title": "An island", "what": "The starter, in its usual style.", "href": "/?starter=island#/design?view=3d&all=1" },
+      { "id": "starter-newfronts", "title": "New doors and drawer fronts", "what": "The starter, in its usual style.", "href": "/?starter=newfronts#/design?view=3d" },
+      { "id": "starter-organizers", "title": "Roll-out trays inside", "what": "The starter, in its usual style.", "href": "/?starter=organizers#/design?view=3d&drawer=70" },
+      { "id": "starter-undersink", "title": "Under a sink", "what": "The starter, in its usual style.", "href": "/?starter=undersink#/design?view=3d&drawer=70" },
+      { "id": "starter-shopcabinet", "title": "A shop cabinet", "what": "The starter, in its usual style.", "href": "/?starter=shopcabinet#/design?view=3d" },
+      { "id": "starter-casters", "title": "A cabinet on casters", "what": "The starter, in its usual style.", "href": "/?starter=casters#/design?view=3d" },
+      { "id": "starter-shopwall", "title": "A wall of shop cabinets", "what": "The starter, in its usual style.", "href": "/?starter=shopwall#/design?view=3d&all=1" },
+      { "id": "starter-assemblytable", "title": "An assembly table", "what": "The starter, in its usual style.", "href": "/?starter=assemblytable#/design?view=3d" },
+      { "id": "starter-shoptable", "title": "A shop table", "what": "The starter, in its usual style.", "href": "/?starter=shoptable#/design?view=3d&all=1" },
+      { "id": "starter-bookcase", "title": "A bookcase", "what": "The starter, in its usual style.", "href": "/?starter=bookcase&preset=builtin-face-frame-shaker#/design?view=3d" },
+      { "id": "starter-dresser", "title": "A dresser", "what": "The starter, in its usual style.", "href": "/?starter=dresser&preset=builtin-face-frame-shaker#/design?view=3d" },
+      { "id": "starter-nightstand", "title": "A night stand", "what": "The starter, in its usual style.", "href": "/?starter=nightstand&preset=builtin-face-frame-shaker#/design?view=3d" },
+      { "id": "starter-endtable", "title": "An end table", "what": "The starter, in its usual style.", "href": "/?starter=endtable&preset=builtin-face-frame-shaker#/design?view=3d" },
+      { "id": "starter-coffeetable", "title": "A coffee table", "what": "The starter, in its usual style.", "href": "/?starter=coffeetable&preset=builtin-face-frame-shaker#/design?view=3d" },
+      { "id": "starter-dropleaftable", "title": "A drop-leaf table", "what": "The starter, in its usual style.", "href": "/?starter=dropleaftable&preset=builtin-face-frame-shaker#/design?view=3d" },
+      { "id": "starter-sofatable", "title": "A sofa table", "what": "The starter, in its usual style.", "href": "/?starter=sofatable&preset=builtin-face-frame-shaker#/design?view=3d" },
+      { "id": "starter-dresser-legs", "title": "A dresser on legs", "what": "The starter, in its usual style.", "href": "/?starter=dresser-legs&preset=builtin-face-frame-shaker#/design?view=3d" },
+      { "id": "starter-dresser-posts", "title": "A wide dresser with corner posts", "what": "The starter, in its usual style.", "href": "/?starter=dresser-posts&preset=builtin-furniture-solid#/design?view=3d" },
+      { "id": "starter-chest-posts", "title": "A tall chest with corner posts", "what": "The starter, in its usual style.", "href": "/?starter=chest-posts&preset=builtin-furniture-solid#/design?view=3d" },
+      { "id": "starter-nightstand-legs", "title": "A night stand on legs", "what": "The starter, in its usual style.", "href": "/?starter=nightstand-legs&preset=builtin-face-frame-shaker#/design?view=3d" },
+      { "id": "starter-tvstand", "title": "A TV stand", "what": "The starter, in its usual style.", "href": "/?starter=tvstand&preset=builtin-face-frame-shaker#/design?view=3d" },
+      { "id": "starter-closettower", "title": "A closet tower", "what": "The starter, in its usual style.", "href": "/?starter=closettower&preset=builtin-frameless-shaker#/design?view=3d" },
+      { "id": "starter-closet", "title": "A closet", "what": "The starter, in its usual style.", "href": "/?starter=closet&preset=builtin-frameless-shaker#/design?view=3d" },
+      { "id": "starter-writingdesk", "title": "A writing desk", "what": "The starter, in its usual style.", "href": "/?starter=writingdesk&preset=builtin-face-frame-shaker#/design?view=3d" },
+      { "id": "starter-desk", "title": "A pedestal desk", "what": "The starter, in its usual style.", "href": "/?starter=desk&preset=builtin-face-frame-shaker#/design?all=1&view=3d" },
+      { "id": "starter-deskhutch", "title": "A desk with a hutch", "what": "The starter, in its usual style.", "href": "/?starter=deskhutch&preset=builtin-face-frame-shaker#/design?piece=table-1&all=1&view=3d" }
+    ]
+  }
+]

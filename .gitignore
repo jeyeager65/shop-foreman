@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.local
+*.log
+.vite/
+coverage/
+
+# Private working notes: never committed
+notes/
+CLAUDE.local.md

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Shop Foreman">
+  <!-- Shop Foreman: a carpenter's square, a check mark set in its corner. -->
+  <rect width="64" height="64" rx="14" fill="#161b26" />
+  <!-- The square: its long blade up the left, its short tongue along the bottom, inch marks on the blade. -->
+  <path d="M13 11h11v31h29v11H13z" fill="#7fb0ff" />
+  <path d="M24 18h-5M24 25h-3.5M24 32h-5M31 42v5M38 42v3.5M45 42v5" stroke="#161b26" stroke-width="2.2" stroke-linecap="round" />
+  <!-- The check: the work is planned. -->
+  <path d="M30 26l7 7 15-17" fill="none" stroke="#e0a85e" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round" />
+</svg>
