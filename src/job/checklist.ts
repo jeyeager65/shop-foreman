@@ -1,5 +1,5 @@
 import { batchInHand, batchWants } from './batch';
-import { FRAME_DOWELS, SEATING, seatingBrackets, frameLeafOf, frameTop, backAgainstWall, dropLeafHinges, dropLeafSupport, leafEdgeWords, leafSidesWords, boxOf, postsOf, POST_SETBACK, legFrameMiddles, piecesOf, towerSpans, onLegs, framesOf, frameFasteners, frameLayout, clearCoatOf, coatsWords, finishSteps, finishesOf, casterGroups, CASTER_INSET, susanOf, sinkCuts, topPieces, topSettingsOf, cabinetIdOf, cabinetTags, cabinetsOf, copiesOf, designsOf, runFit, tagged, deriveWayIn } from '@/design';
+import { FRAME_DOWELS, SEATING, seatingBrackets, frameLeafOf, frameTop, backAgainstWall, dropLeafHinges, dropLeafSupport, leafEdgeWords, leafSidesWords, boxOf, postsOf, POST_SETBACK, legFrameMiddles, piecesOf, towerSpans, onLegs, framesOf, frameFasteners, frameLayout, clearCoatOf, coatsWords, finishSteps, finishesOf, casterGroups, CASTER_INSET, susanOf, sinkCuts, SINK, topPieces, topSettingsOf, cabinetIdOf, cabinetTags, cabinetsOf, copiesOf, designsOf, runFit, tagged, deriveWayIn } from '@/design';
 import { hubOf } from '@/design/hub';
 import { JOIN_SCREWS } from './lists';
 import { jigSleeve, sleeveGoesIn, sleeveWords } from '@/geometry/pocketHole';
@@ -557,7 +557,9 @@ export function buildChecklistSections(
   }
   // Tops (milestone 7): once the cabinets stand, the tops go on them.
   const pieces = (project.context.kind === 'designedCabinet' ? topPieces(project, project.materials) : []).filter((p) => p.cabinetIds.some((id) => wants(id, 'tops')));
-  if (pieces.length && project.context.kind === 'designedCabinet') {
+  // A bought top with its sink in it is a top too, with no piece of its own.
+  const integrated = cabinetsOf(project).filter((c) => c.sink?.mount === 'integrated' && c.form === 'base' && wants(c.id, 'tops'));
+  if ((pieces.length || integrated.length) && project.context.kind === 'designedCabinet') {
     const tops = topSettingsOf(project.context);
     open('Tops');
     // The slabs made here, by their own settings (one top may differ from Setup's).
@@ -591,14 +593,24 @@ export function buildChecklistSections(
     for (const p of pieces.filter((x) => seatingBrackets(x) > 0))
       say(`Before the island's top goes on: screw the ${seatingBrackets(p)} support brackets to the cabinets at the ${leafEdgeWords(p.seating!.edge)}, their tops level with the cabinets' tops, one about every ${show(SEATING.every)}. The top's side for stools, ${show(p.seating!.overhang)} past the cabinets, rests on them.`);
     // A sink's opening: cut with the top on the CNC, or by hand in a top that is bought or sawn.
-    for (const cut of sinkCuts(project, pieces)) {
+    for (const cut of sinkCuts(project, pieces).filter((c) => c.sink.mount !== 'integrated')) {
+      const sink = cut.sink;
+      const name = cut.name.toLowerCase();
       const size = `${show(cut.x1 - cut.x0)} × ${show(cut.zFront - cut.zBack)}`;
+      const opening = sink.mount === 'vessel' ? `the drain hole for the ${name} (${show(SINK.drain)} across)` : `the opening${cut.outlines.length > 1 ? 's' : ''} for the ${name} (${size}${cut.outlines.length > 1 ? ', one for each bowl' : ''})`;
       const kind = cut.piece.settings.kind;
       const onCnc = kind === 'made' && (plan.parts.find((x) => x.partId === cut.piece.id)?.cutOut ?? 'cnc') === 'cnc';
-      if (kind === 'measured') say(`Give the supplier the ${cut.name.toLowerCase()}'s own template for its opening (about ${size}).`);
-      else if (onCnc) say(`The CNC cuts the opening for the ${cut.name.toLowerCase()} (${size}) with its top: check that size against the sink's own template before cutting. Seal the opening's raw edges.`);
-      else say(`Cut the opening for the ${cut.name.toLowerCase()} by hand: ${size}, centred front to back, marked from the sink's own template. Drill the corners, cut between them with a jigsaw from the top face, and support the waste so it does not tear out as it drops.`);
-      say(`Set the ${cut.name.toLowerCase()} in a bead of sealant and clamp it from below with its clips.`);
+      if (kind === 'measured') say(`Give the supplier the ${name}'s own template for its opening (about ${size})${sink.mount === 'undermount' ? ', and say it is an undermount: the edge is polished' : ''}.`);
+      else if (onCnc) say(`The CNC cuts ${opening} with its top: check that size against the sink's own template before cutting. Seal the opening's raw edges.`);
+      else if (sink.mount === 'vessel') say(`Drill ${opening} by hand with a hole saw, where the vessel's drain stands.`);
+      else say(`Cut the opening${cut.outlines.length > 1 ? 's' : ''} for the ${name} by hand: ${size}${cut.outlines.length > 1 ? ' over both, one for each bowl' : ''}, centred front to back, marked from the sink's own template. Drill the corners, cut between them with a jigsaw from the top face, and support the waste so it does not tear out as it drops.`);
+      if (sink.mount === 'dropIn') say(`Set the ${name} in a bead of sealant and clamp it from below with its clips.`);
+      else if (sink.mount === 'undermount') say(`Before the top goes on: turn it over, set the ${name} under its opening${cut.outlines.length > 1 ? 's' : ''} in a bead of silicone, centred on them, and fix it with its clips. Ease and seal the opening's edge, which shows.`);
+      else if (sink.mount === 'vessel') say(`Set the ${name} on its drain over the hole, in a bead of silicone, and tighten the drain from below.`);
+    }
+    // A bought top with its sink in it: set on the cabinet in place of a top.
+    for (const cabinet of integrated) {
+      say(`Set the vanity top with its sink on ${cabinet.name || 'the cabinet'} in a bead of silicone on the case's top edges, its back against the wall, and seal it to the wall.`);
     }
     const kinds = new Set(pieces.map((p) => p.settings.kind));
     if (kinds.has('bought')) say('Cut each laminate top to length with a fine blade, the good face down on a circular/track saw; cut a mitre on a jig and draw it tight with the connector bolts. Fit the end caps.');

@@ -4,7 +4,7 @@
  * drilled with the Kreg jig, each with its positions. All derived from the job;
  * nothing here is stored and nothing changes a part.
  */
-import { DROP_LEAF, SEATING, seatingBrackets, seatingEdgeLength, FRAME_DOWELS, LEAF, frameLeafOf, frameTop, backAgainstWall, dropLeafHinges, dropLeafSupport, leafEdgeWords, leafSidesWords, towerSpans, closetRod, hangingWords, framesOf, frameFasteners, needsAntiTip, deriveUnderSink, falseFrontsOf, deriveSusan, susanOf, doorsOnSusan, CASE_SCREW, finishAmounts, cansOf, usesWords, coverageShown, coverageUnit, casterGroups, isCaster, boughtLength, boughtTopOf, lazySusanDiameter, topPieces, topSettingsOf, RUNNER_SCREW, RUNNER_SCREWS, fasteningHole, cabinetIdOf, cabinetsOf, copiesOf, partTag, designsOf, drawerBox, hungDesigns, isDoorSet, isDrawer, partFaces, shelfPinFor } from '@/design';
+import { DROP_LEAF, SEATING, seatingBrackets, seatingEdgeLength, FRAME_DOWELS, LEAF, frameLeafOf, frameTop, backAgainstWall, dropLeafHinges, dropLeafSupport, leafEdgeWords, leafSidesWords, towerSpans, closetRod, hangingWords, framesOf, frameFasteners, needsAntiTip, deriveUnderSink, falseFrontsOf, sinkWords, deriveSusan, susanOf, doorsOnSusan, CASE_SCREW, finishAmounts, cansOf, usesWords, coverageShown, coverageUnit, casterGroups, isCaster, boughtLength, boughtTopOf, lazySusanDiameter, topPieces, topSettingsOf, RUNNER_SCREW, RUNNER_SCREWS, fasteningHole, cabinetIdOf, cabinetsOf, copiesOf, partTag, designsOf, drawerBox, hungDesigns, isDoorSet, isDrawer, partFaces, shelfPinFor } from '@/design';
 import { HUB, hubOf } from '@/design/hub';
 import { POCKET, jigSleeve, lowPocketScrew, pocketAxis, pocketShape, sleeveWords } from '@/geometry/pocketHole';
 import { cncPocketsFit, lowAngleOf, pocketHoleMethod, pocketSeatOf } from '@/plan/parts';
@@ -1101,7 +1101,7 @@ export function buildLists(job: Job, project: Project, shop: Shop, length: (mm: 
 
   const slideJigs = [...jigHeights].sort((a, b) => a - b).map((height) => ({ height, quantity: 2 }));
   for (const jig of slideJigs) hardware.push({ group: 'Under the sink', item: `Slide jigs, ${length(jig.height)} high`, quantity: jig.quantity, note: "Printed stands: a build-out strip rests on two of them, level at its height, while it is screwed to the cabinet's side (3MF)." });
-  return { buying: [...buyingList(job, project, shop, all, planOf, materialName, length), ...topsToBuy(project, shop, length)], parts, cutList, hardware, kreg, byHand, ...(shims ? { shims } : {}), ...(slideJigs.length ? { slideJigs } : {}) };
+  return { buying: [...buyingList(job, project, shop, all, planOf, materialName, length), ...topsToBuy(project, shop, length), ...sinksToBuy(project, length)], parts, cutList, hardware, kreg, byHand, ...(shims ? { shims } : {}), ...(slideJigs.length ? { slideJigs } : {}) };
 }
 
 /**
@@ -1127,6 +1127,18 @@ function topsToBuy(project: Project, shop: Shop, length: (mm: Mm) => string): Bu
       size: { width: stock, height: bought.depth.mm },
       note: long > stock + 0.5 ? `Longer than any length it comes in: ${length(long)} needed; join two.` : `Cut to ${length(long)}${mitres}.`,
     };
+  });
+}
+
+/** The sinks, bought: one for each cabinet that has one (each copy), a bought top with its sink in it as the top. */
+function sinksToBuy(project: Project, length: (mm: Mm) => string): BuyRow[] {
+  return cabinetsOf(project).flatMap((cabinet): BuyRow[] => {
+    const sink = cabinet.sink;
+    if (!sink || cabinet.form !== 'base') return [];
+    const size = { width: sink.width.mm, height: sink.depth.mm };
+    if (sink.mount === 'integrated') return [{ material: 'Vanity top with its sink in it', quantity: copiesOf(cabinet), unit: 'piece', size, note: `${length(sink.width.mm)} × ${length(sink.depth.mm)}, its bowl ${length(sink.bowlDepth.mm)} deep, over ${cabinet.name || 'the cabinet'}: bought, with its faucet holes.` }];
+    const how = { dropIn: 'its rim on the top', undermount: 'fixed under the top with its clips', vessel: 'standing on the top, with its drain', farmhouse: 'standing on its frame in the cabinet, its apron in front', integrated: '' }[sink.mount];
+    return [{ material: sinkWords(sink, length), quantity: copiesOf(cabinet), unit: 'piece', size, note: `Over ${cabinet.name || 'the cabinet'}, ${how}${sink.double ? `, ${sink.double.leftShare > 0.55 ? '60/40' : 'equal'} bowls` : ''}, ${length(sink.bowlDepth.mm)} deep. Its sizes are the maker's: check them against the one bought before the top is cut.` }];
   });
 }
 

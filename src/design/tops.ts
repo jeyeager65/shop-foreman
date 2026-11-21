@@ -10,7 +10,7 @@
  */
 import type { BoughtTop, CabinetDesign, CabinetSink, DesignedCabinetContext, Hardware, LeafEdge, Material, Mm, OwnTop, TopLeaf, Part, Point, Project, Run, TopDesign, TopSettings, TorsionSettings, TorsionTable, Vec3 } from '@/model';
 import { applianceFootprint, appliancePlace, applianceShapeId, appliancesOf, underCounter } from './appliances';
-import { SINK, sinkCentre, sinkOpening } from './sinks';
+import { SINK, roundedOutline, sinkCentre, sinkOpenings } from './sinks';
 import { LEAF, deriveTorsionParts, leafHardwareShapes, lightTopTable, torsionRibProblem, torsionThickness } from './torsion';
 import { DROP_LEAF, dropLeafShapes } from './dropLeaf';
 import { pocketRow } from './pocketHoles';
@@ -783,7 +783,7 @@ export const SINK_RIM: Mm = SINK.rim;
 
 /**
  * A sink in a top piece, in the piece's own frame (X along it, Z as the piece's `zBack` and `zFront`): its centre,
- * the opening cut through the piece (`outline`, empty for none), and that opening's bounds.
+ * the openings cut through the piece (`outlines`, none for a top with its sink), and their bounds.
  */
 export interface SinkCut {
   cabinetId: string;
@@ -794,7 +794,7 @@ export interface SinkCut {
   cx: Mm;
   cz: Mm;
   dir: 1 | -1;
-  outline: [Mm, Mm][];
+  outlines: [Mm, Mm][][];
   x0: Mm;
   x1: Mm;
   zBack: Mm;
@@ -838,7 +838,8 @@ export function sinkCuts(project: Project, pieces: TopPiece[], torsionToo = fals
       if (!toPiece) continue;
       const [lx, lz] = sinkCentre(cabinet, along !== undefined ? front : SINK.frontGuess);
       const [cx, cz] = toPiece(lx, lz);
-      const outline = sinkOpening(sink).map(([x, z]): [Mm, Mm] => [cx + dir * x, cz + dir * z]);
+      const outlines = sinkOpenings(sink).map((loop) => loop.map(([x, z]): [Mm, Mm] => [cx + dir * x, cz + dir * z]));
+      const outline = outlines.flat();
       const xs = outline.map((p) => p[0]);
       const zs = outline.map((p) => p[1]);
       const half = [sink.width.mm / 2, sink.depth.mm / 2];
@@ -851,7 +852,7 @@ export function sinkCuts(project: Project, pieces: TopPiece[], torsionToo = fals
         cx,
         cz,
         dir,
-        outline,
+        outlines,
         x0: outline.length ? Math.min(...xs) : cx - half[0]!,
         x1: outline.length ? Math.max(...xs) : cx + half[0]!,
         zBack: outline.length ? Math.min(...zs) : cz - half[1]!,
@@ -872,11 +873,21 @@ export function sinkProblems(project: Project, cabinet: CabinetDesign, materials
   const out: string[] = [];
   const pieces = topPieces(project, materials);
   const cut = sinkCuts(project, pieces, true).find((c) => c.cabinetId === cabinet.id);
-  if (!cut) out.push("No top lies over this cabinet, so the sink's opening is not cut: give it a countertop (Place and corner, or its run's Top).");
+  if (sink.mount === 'integrated') {
+    // Its top is the sink's own: another top over the cabinet is one too many.
+    if (cut) out.push('A top with its sink in it is the whole top of this cabinet, but another top lies over it too: take that top off, or choose another kind of sink.');
+  } else if (!cut) out.push("No top lies over this cabinet, so the sink's opening is not cut: give it a countertop (Place and corner, or its run's Top).");
   else if (cut.piece.torsion) out.push('The top over this cabinet is a torsion box, which takes no sink: give it a slab of its own.');
+  else if (sink.mount === 'undermount' || sink.mount === 'farmhouse') {
+    // Under the top, the opening's cut edge shows and gets wet: stone, or solid wood that is sealed.
+    const kind = cut.piece.settings.kind;
+    const material = materials.find((m) => m.id === cut.piece.settings.materialId);
+    if (kind === 'bought') out.push("An undermount sink leaves the top's cut edge showing, and a laminate top's core swells when it gets wet: drop it in instead, or use a stone or solid wood top.");
+    else if ((kind === 'made' || kind === 'torsion') && material?.groupId !== 'solid-wood') out.push(`An undermount sink leaves the top's cut edge showing: ${material?.name.toLowerCase() ?? 'this material'}'s edge cannot be left open where it gets wet. Drop it in instead, or use a stone or solid wood top.`);
+  }
   // The bowl hangs between the case sides (a drop-in's rim may lap them).
   const inside = cabinet.size.width.mm - 2 * thicknessOf(materials, cabinet.materials.caseId);
-  const bowl = sink.mount === 'vessel' ? 0 : sink.width.mm - (sink.mount === 'dropIn' ? 2 * SINK.rim : 0);
+  const bowl = sink.mount === 'vessel' ? 0 : sink.mount === 'integrated' ? sink.width.mm * SINK.integratedBowl.width : sink.width.mm - (sink.mount === 'dropIn' ? 2 * SINK.rim : 0);
   const [cx] = sinkCentre(cabinet);
   if (bowl > 0 && (cx - bowl / 2 < (cabinet.size.width.mm - inside) / 2 - 0.5 || cx + bowl / 2 > (cabinet.size.width.mm + inside) / 2 + 0.5)) {
     out.push(`The sink's bowl, ${length(bowl)} wide, does not fit between the case sides (${length(inside)} inside${sink.offset ? ', where it sits' : ''}): choose a narrower sink or a wider cabinet.`);
@@ -890,8 +901,7 @@ export function sinkProblems(project: Project, cabinet: CabinetDesign, materials
 
 /** A sink's opening as a feature of a top's panel whose front-left corner (seen from above) is at `x0`, `zFront` in the piece's frame. */
 function sinkFeature(cut: SinkCut, x0: Mm, zFront: Mm): Part['features'] {
-  if (!cut.outline.length) return [];
-  return [{ id: `sink-${cut.cabinetId}`, kind: 'cutout', face: 'A', inside: true, outline: cut.outline.map(([x, z]) => ({ x: x - x0, y: zFront - z })) }];
+  return cut.outlines.map((loop, i) => ({ id: `sink-${cut.cabinetId}${i ? `-${i + 1}` : ''}`, kind: 'cutout' as const, face: 'A' as const, inside: true, outline: loop.map(([x, z]) => ({ x: x - x0, y: zFront - z })) }));
 }
 
 /** How thick the project's tops are: made here, bought, or measured. */
@@ -910,16 +920,18 @@ export function sinkShapes(project: Project, materials: Material[], hardware: Ha
   if (project.context.kind !== 'designedCabinet') return [];
   // No sink, nothing to work out: a project whose only top is a torsion table has no top material to measure.
   if (!cabinetsOf(project).some((c) => c.sink)) return [];
-  const cuts = sinkCuts(project, topPieces(project, materials));
-  if (!cuts.length) return [];
-  return cuts.map((cut): Part => {
+  const cuts = sinkCuts(project, topPieces(project, materials)).filter((c) => c.sink.mount !== 'integrated');
+  return [...integratedTopShapes(project), ...cuts.map((cut): Part => {
     const thick = topThickness(cut.piece.settings, materials, hardware);
     const bowl = cut.sink.bowlDepth.mm;
     // The bowl is drawn no further forward than what the doors close against: in a shallow case a sink's rim reaches
     // past the case front, and its bowl showed through the doors.
     const under = cabinetsOf(project).find((c) => c.id === cut.piece.cabinetId);
-    const zFront = Math.min(cut.zFront, (under ? constructionRules(under, materials).frontPlane : 0) - 1);
-    const [width, depth] = [cut.x1 - cut.x0, zFront - cut.zBack];
+    // A vessel stands on the top, as wide as it is.
+    const vessel = cut.sink.mount === 'vessel';
+    const [x0, zBack, front] = vessel ? [cut.cx - cut.sink.width.mm / 2, cut.cz - cut.sink.depth.mm / 2, cut.cz + cut.sink.depth.mm / 2] : [cut.x0, cut.zBack, cut.zFront];
+    const zFront = vessel ? front : Math.min(front, (under ? constructionRules(under, materials).frontPlane : 0) - 1);
+    const [width, depth] = [vessel ? cut.sink.width.mm : cut.x1 - cut.x0, zFront - zBack];
     return {
       id: `${cut.piece.id}/${applianceShapeId(`appliance-sink-${cut.cabinetId}`)}`,
       designObjectId: cut.piece.cabinetId,
@@ -928,8 +940,56 @@ export function sinkShapes(project: Project, materials: Material[], hardware: Ha
       size: { width, height: depth, thickness: bowl },
       features: [{ id: 'cutout', kind: 'cutout', face: 'A', outline: [{ x: 0, y: 0 }, { x: width, y: 0 }, { x: width, y: depth }, { x: 0, y: depth }] }],
       role: 'top',
-      placement: { origin: [cut.x0, cut.piece.y + thick - 6, zFront], xAxis: [1, 0, 0], yAxis: [0, 0, -1] },
+      placement: { origin: [x0, cut.piece.y + thick + (vessel ? bowl : -6), zFront], xAxis: [1, 0, 0], yAxis: [0, 0, -1] },
     };
+  })];
+}
+
+/** Where a bought top with its sink in it lies, in its cabinet's frame: its edges, and its bowl's centre and size. */
+export function integratedTop(cabinet: CabinetDesign): { x0: Mm; x1: Mm; zBack: Mm; zFront: Mm; bowl: { cx: Mm; cz: Mm; width: Mm; depth: Mm } } | undefined {
+  const sink = cabinet.sink;
+  if (!sink || sink.mount !== 'integrated' || cabinet.form !== 'base') return undefined;
+  const [cx] = sinkCentre(cabinet);
+  const [x0, zBack] = [cx - sink.width.mm / 2, -cabinet.size.depth.mm];
+  const zFront = zBack + sink.depth.mm;
+  return { x0, x1: x0 + sink.width.mm, zBack, zFront, bowl: { cx, cz: (zBack + zFront) / 2 + sink.depth.mm * 0.05, width: sink.width.mm * SINK.integratedBowl.width, depth: sink.depth.mm * SINK.integratedBowl.depth } };
+}
+
+/**
+ * The bought tops with their sinks in them, drawn on their cabinets: a slab as big as the top, its bowl's opening in
+ * it, and the bowl under it. For the picture only; nothing is cut (it is on the buying list).
+ */
+function integratedTopShapes(project: Project): Part[] {
+  return cabinetsOf(project).flatMap((cabinet): Part[] => {
+    const top = integratedTop(cabinet);
+    if (!top) return [];
+    const sink = cabinet.sink!;
+    const [width, depth, y] = [top.x1 - top.x0, top.zFront - top.zBack, cabinet.size.height.mm];
+    const bowl = roundedOutline(top.bowl.width, top.bowl.depth, sink.shape).map(([x, z]) => ({ x: top.bowl.cx + x - top.x0, y: top.zFront - (top.bowl.cz + z) }));
+    const slab: Part = {
+      id: `${cabinet.id}/sink-top-shown`,
+      designObjectId: cabinet.id,
+      name: 'Vanity top, with its sink (bought)',
+      materialId: cabinet.materials.caseId,
+      size: { width, height: depth, thickness: SINK.integratedThick },
+      features: [
+        { id: 'cutout', kind: 'cutout', face: 'A', outline: [{ x: 0, y: 0 }, { x: width, y: 0 }, { x: width, y: depth }, { x: 0, y: depth }] },
+        { id: 'sink-bowl', kind: 'cutout', face: 'A', inside: true, outline: bowl },
+      ],
+      role: 'top',
+      placement: { origin: [top.x0, y + SINK.integratedThick, top.zFront], xAxis: [1, 0, 0], yAxis: [0, 0, -1] },
+    };
+    const basin: Part = {
+      id: `${cabinet.id}/${applianceShapeId(`appliance-sink-${cabinet.id}`)}`,
+      designObjectId: cabinet.id,
+      name: 'Sink',
+      materialId: cabinet.materials.caseId,
+      size: { width: top.bowl.width, height: top.bowl.depth, thickness: sink.bowlDepth.mm },
+      features: [{ id: 'cutout', kind: 'cutout', face: 'A', outline: [{ x: 0, y: 0 }, { x: top.bowl.width, y: 0 }, { x: top.bowl.width, y: top.bowl.depth }, { x: 0, y: top.bowl.depth }] }],
+      role: 'top',
+      placement: { origin: [top.bowl.cx - top.bowl.width / 2, y + SINK.integratedThick - 6, top.bowl.cz + top.bowl.depth / 2], xAxis: [1, 0, 0], yAxis: [0, 0, -1] },
+    };
+    return [slab, basin];
   });
 }
 

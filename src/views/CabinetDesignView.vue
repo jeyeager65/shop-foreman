@@ -107,6 +107,7 @@ import {
   SINK,
   SINK_MOUNTS,
   newSink,
+  sinkOfKind,
   sinkProblems,
   sinkWords,
   takesTopSupport,
@@ -195,7 +196,7 @@ import {
   tagged,
 } from '@/design';
 import { templatesHtml } from '@/job/templatesHtml';
-import type { Appliance, CabinetOpening, DesignedCabinetContext, Length, Obstacle, ObstacleKind, OpeningRow, Organizer, Part, Placement, RoomWall, Run, RunEnd } from '@/model';
+import type { Appliance, CabinetOpening, SinkMount, DesignedCabinetContext, Length, Obstacle, ObstacleKind, OpeningRow, Organizer, Part, Placement, RoomWall, Run, RunEnd } from '@/model';
 import { activeMachine, partLimit, pocketLedgesOf, withPocketLooks } from '@/plan';
 import { materialLook } from '@/libraries';
 import { makeBlind, makeLShaped, applyCabinetLayout, setBays, setBayOpen, setRowOpen, setRowSplit, copyCabinet, createCabinetDoorSet, createCabinetDrawer, deleteCabinet, EXISTING_DRAWERS_MAX, makeExisting, setExistingOpenings, makeMade, moveCabinet } from '@/samples/cabinet';
@@ -747,8 +748,15 @@ const setCabinetSink = (on: boolean) => {
   if (on) cabinet.value.sink = newSink(cabinet.value);
   else delete cabinet.value.sink;
 };
-/** The kinds offered: a drop-in, and the kind the sink is. */
-const sinkMounts = computed(() => SINK_MOUNTS.filter((m) => m.value === 'dropIn' || m.value === cabinet.value.sink?.mount));
+/** The kinds offered: all but a farmhouse sink, which is a kitchen's (and the kind the sink is). */
+const sinkMounts = computed(() => SINK_MOUNTS.filter((m) => m.value !== 'farmhouse' || m.value === cabinet.value.sink?.mount));
+/** Another kind: its sizes start again as that kind's; where it sits and its faucet stay. */
+const setSinkMount = (mount: SinkMount) => {
+  const now = cabinet.value.sink;
+  if (!now || now.mount === mount) return;
+  const next = sinkOfKind(cabinet.value, mount);
+  cabinet.value.sink = { ...next, ...(now.offset ? { offset: now.offset } : {}), ...(now.faucet && mount !== 'integrated' ? { faucet: now.faucet } : {}) };
+};
 const SINK_SHAPES = [
   { title: 'Square or rectangle', value: 'rectangle' },
   { title: 'Round or oval', value: 'oval' },
@@ -2233,9 +2241,9 @@ function notes(part: Part): string[] {
         <v-switch :model-value="!!cabinet.sink" label="A sink over it" color="primary" density="compact" hide-details data-test="sink-on" @update:model-value="setCabinetSink(!!$event)" />
         <template v-if="cabinet.sink">
           <v-row density="compact">
-            <v-col cols="12"><v-select v-model="cabinet.sink.mount" label="Kind" :items="sinkMounts" hide-details data-test="sink-mount" /></v-col>
+            <v-col cols="12"><v-select :model-value="cabinet.sink.mount" label="Kind" :items="sinkMounts" hide-details data-test="sink-mount" @update:model-value="setSinkMount" /></v-col>
             <v-col cols="6"><v-select v-model="cabinet.sink.shape" label="Shape" :items="SINK_SHAPES" hide-details data-test="sink-shape" /></v-col>
-            <v-col cols="6"><v-select :model-value="sinkBowls" label="Bowls" :items="SINK_BOWLS" hide-details data-test="sink-bowls" @update:model-value="setSinkBowls" /></v-col>
+            <v-col v-if="cabinet.sink.mount !== 'vessel' && cabinet.sink.mount !== 'integrated'" cols="6"><v-select :model-value="sinkBowls" label="Bowls" :items="SINK_BOWLS" hide-details data-test="sink-bowls" @update:model-value="setSinkBowls" /></v-col>
             <v-col cols="4"><LengthField v-model="cabinet.sink.width" label="Width" /></v-col>
             <v-col cols="4"><LengthField v-model="cabinet.sink.depth" label="Front to back" /></v-col>
             <v-col cols="4"><LengthField v-model="cabinet.sink.bowlDepth" label="Bowl depth" /></v-col>

@@ -14,6 +14,7 @@ import { benchTopTable, torsionMaterialIds } from '@/design/torsion';
 import { SQUARE_3X3_ID } from '@/libraries/materials';
 import { cabinetsOf } from '@/design/settings';
 import { createOrganizer, createUnderSink } from '@/design/underSink';
+import { sinkOfKind } from '@/design/sinks';
 import { EURO_SLIDE_ID, GENERIC_KNOB_ID, PLYWOOD_3_4_ID, SOLID_WOOD_3_4_ID } from '@/libraries';
 import type { CabinetDesign, DesignedCabinetContext, Hardware, Id, Material, Preset, Project, StoredFrame } from '@/model';
 import { len } from '@/units';
@@ -106,7 +107,10 @@ function asDrawers(project: Project, cabinet: CabinetDesign) {
   storedOf(project, cabinet.id).size.width = len('18"');
   applyCabinetLayout(project, cabinet, 'drawers', 3);
 }
-/** A bathroom vanity: 30" wide and 21" deep, doors only, a sink over it with its trap and a tray under it, corner blocks under the top. */
+/**
+ * A bathroom vanity: 30" wide and 21" deep, doors only, a bought top with its sink in it, the sink's trap and a tray
+ * under it, corner blocks under the top.
+ */
 function asVanity(project: Project, cabinet: CabinetDesign) {
   const stored = storedOf(project, cabinet.id);
   stored.size.width = len('30"');
@@ -115,6 +119,7 @@ function asVanity(project: Project, cabinet: CabinetDesign) {
   stored.inside = createUnderSink({ bottomTray: true });
   stored.adjustableShelves = 0;
   stored.topSupport = { cornerBlocks: true };
+  stored.sink = sinkOfKind(stored, 'integrated');
 }
 /** A diagonal corner cabinet, 36" along each wall, the room's corner at its left. */
 function asCorner(project: Project, cabinet: CabinetDesign) {
@@ -410,7 +415,7 @@ export const STARTERS: Starter[] = [
     examples: 'vanity',
     group: 'cabinets',
     title: 'A bathroom vanity',
-    what: '30" wide and 21" deep, with its sink and a roll-out tray under it.',
+    what: '30" wide and 21" deep, a bought top with its sink, and a roll-out tray under it.',
     name: 'Vanity',
     stem: 'Vanity',
     example: true,

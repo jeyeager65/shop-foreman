@@ -29,6 +29,13 @@ export const SINK = {
   frontGuess: 1.75 * IN,
   /** Segments in a round outline. */
   segments: 48,
+  /** Between the two bowls of a double undermount or farmhouse sink: the top over the divider, its width. */
+  divider: 2 * IN,
+  /** A bought top with its bowl in it: how thick it is drawn, and its bowl's share of the top's width and depth. */
+  integratedThick: 0.75 * IN,
+  integratedBowl: { width: 0.6, depth: 0.6 },
+  /** A bought vanity top's overhang past the case each side and at the front. */
+  integratedOver: { side: 0.5 * IN, front: 1 * IN },
 };
 
 /** The kinds, in words, in the order Design offers them. */
@@ -48,6 +55,20 @@ export function newSink(cabinet: Pick<CabinetDesign, 'size'>): CabinetSink {
   if (cabinet.size.depth.mm < 22 * IN) return { mount: 'undermount', width: len('19"'), depth: len('16"'), bowlDepth: len('6"'), shape: 'oval' };
   const width = Math.min(33 * IN, cabinet.size.width.mm - 3 * IN);
   return { mount: 'dropIn', width: { mm: width, unit: 'in' }, depth: len('22"'), bowlDepth: len('9"'), shape: 'rectangle' };
+}
+
+/**
+ * A sink of a kind for a cabinet, as Design starts it when the kind is chosen: a vessel a 16" round bowl 5" deep; a
+ * bought top with its sink as big as the case and its overhang; the others as `newSink`, of that kind. Tune me.
+ */
+export function sinkOfKind(cabinet: Pick<CabinetDesign, 'size'>, mount: SinkMount, front: Mm = SINK.frontGuess - SINK.integratedOver.front): CabinetSink {
+  if (mount === 'vessel') return { mount, width: len('16"'), depth: len('16"'), bowlDepth: len('5"'), shape: 'oval' };
+  if (mount === 'integrated') {
+    const width = cabinet.size.width.mm + 2 * SINK.integratedOver.side;
+    const depth = cabinet.size.depth.mm + front + SINK.integratedOver.front;
+    return { mount, width: { mm: width, unit: 'in' }, depth: { mm: depth, unit: 'in' }, bowlDepth: len('6"'), shape: 'oval' };
+  }
+  return { ...newSink(cabinet), mount };
 }
 
 /** A rectangle with rounded corners (radius `r`), or an ellipse, `w` × `d`, centred: its outline as points, counter-clockwise seen from above. */
@@ -74,14 +95,38 @@ export function sinkInset(sink: Pick<CabinetSink, 'mount'>): Mm {
 }
 
 /**
- * The opening a sink needs through its top, in its own frame: inside its rim or its flange, or a vessel's drain. An
- * integrated sink needs none (its top is the sink's). Empty: none.
+ * The bowls of a sink, in its own frame: each one's centre across, and its width (the outside, less the divider
+ * between two). One bowl is the whole sink.
  */
-export function sinkOpening(sink: CabinetSink): [Mm, Mm][] {
+export function sinkBowls(sink: Pick<CabinetSink, 'width' | 'double'>): { x: Mm; width: Mm }[] {
+  const w = sink.width.mm;
+  if (!sink.double) return [{ x: 0, width: w }];
+  const share = Math.min(0.8, Math.max(0.2, sink.double.leftShare));
+  const left = (w - SINK.divider) * share;
+  const right = w - SINK.divider - left;
+  return [
+    { x: -w / 2 + left / 2, width: left },
+    { x: w / 2 - right / 2, width: right },
+  ];
+}
+
+/**
+ * The openings a sink needs through its top, in its own frame, each a loop: inside a drop-in's rim (one opening, two
+ * bowls or one), inside an undermount's or a farmhouse sink's flange (one for each bowl, the top running over the
+ * divider), or a vessel's drain. An integrated sink needs none (its top is the sink's).
+ */
+export function sinkOpenings(sink: CabinetSink): [Mm, Mm][][] {
   if (sink.mount === 'integrated') return [];
-  if (sink.mount === 'vessel') return roundedOutline(SINK.drain, SINK.drain, 'oval');
+  if (sink.mount === 'vessel') return [roundedOutline(SINK.drain, SINK.drain, 'oval')];
   const inset = sinkInset(sink);
-  return roundedOutline(sink.width.mm - 2 * inset, sink.depth.mm - 2 * inset, sink.shape, SINK.corner - inset);
+  const depth = sink.depth.mm - 2 * inset;
+  if (sink.mount === 'dropIn' || !sink.double) return [roundedOutline(sink.width.mm - 2 * inset, depth, sink.shape, SINK.corner - inset)];
+  // Two bowls under the top: the outer edges inside the flange, the inner ones at the divider's sides.
+  return sinkBowls(sink).map((b, i) => {
+    const w = b.width - inset;
+    const x = b.x + (i === 0 ? inset / 2 : -inset / 2);
+    return roundedOutline(w, depth, sink.shape, SINK.corner - inset).map(([px, pz]): [Mm, Mm] => [px + x, pz]);
+  });
 }
 
 /**
