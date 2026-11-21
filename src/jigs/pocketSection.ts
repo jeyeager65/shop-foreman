@@ -8,7 +8,8 @@
  * (negative into the board). Lengths along the screw are measured from where it leaves the edge.
  */
 import { LOW_POCKET, POCKET, arcFloorAt, arcSeatAt, arcShape, lowPocketScrew } from '@/geometry/pocketHole';
-import type { Mm } from '@/model';
+import type { LengthDisplay, Mm } from '@/model';
+import { formatLength } from '@/units';
 import { MM_PER_INCH } from '@/units';
 
 /**
@@ -86,4 +87,22 @@ export function pocketSection(thickness: Mm, angleDeg: number, seatFromEdge: Mm 
   const screw = pocketScrew(thickness, low);
   const into = screw - seat;
   return { thickness, angleDeg, seat, screw, screwKind: low ? 'castle' : 'kreg', fine: !low && hardwood, pocket, channel, into, short: into < POCKET_SCREW.leastInto - 0.5, through: into * cos > thickness + 0.5 };
+}
+
+/** A length in inches to the 1/16", "≈" in front when it is not exact (no 32nds to think in). */
+export function inchesBy16(mm: Mm): string {
+  const sixteenths = (mm / MM_PER_INCH) * 16;
+  const exact = Math.abs(sixteenths - Math.round(sixteenths)) < 0.02;
+  return `${exact ? '' : '≈'}${formatLength(mm, { kind: 'fractionalInch', denominator: 16 })}`;
+}
+
+/** A length in mm to the tenth. */
+export const mmBy10 = (mm: Mm): string => `${+mm.toFixed(1)} mm`;
+
+/**
+ * A length on the scrap test's page in both units, its own first and the other after it: what the CNC cuts and is
+ * measured on the scrap goes by the shop's CNC unit (22.2 mm (7/8")), what is bought by its sizes unit (1-1/2" (38.1 mm)).
+ */
+export function bothUnits(mm: Mm, first: LengthDisplay): string {
+  return first.kind === 'mm' ? `${mmBy10(mm)} (${inchesBy16(mm)})` : `${inchesBy16(mm)} (${mmBy10(mm)})`;
 }

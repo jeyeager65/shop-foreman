@@ -6,15 +6,15 @@
  */
 import { computed } from 'vue';
 import type { PocketSection } from '@/jigs/pocketSection';
-import { POCKET_SCREW } from '@/jigs/pocketSection';
+import { POCKET_SCREW, bothUnits } from '@/jigs/pocketSection';
 import { POCKET } from '@/geometry/pocketHole';
 import { useAppStore } from '@/stores/app';
 
 const props = defineProps<{ section: PocketSection; title: string }>();
 const store = useAppStore();
-/** Its lengths in the shop's CNC and tooling unit, as the rest of the page; the screw as it is bought, in the sizes unit. */
-const L = computed(() => store.cncLength);
-const screwName = computed(() => store.sizeLength);
+/** Its lengths as the rest of the scrap test's page, in both units: what is cut and measured the CNC unit first, the screw as bought. */
+const L = computed(() => (mm: number) => bothUnits(mm, store.units.cnc));
+const screwName = computed(() => (mm: number) => bothUnits(mm, store.units.sizes));
 
 const s = computed(() => props.section);
 const a = computed(() => (s.value.angleDeg * Math.PI) / 180);
@@ -80,11 +80,9 @@ const screwTransform = computed(() => `translate(0 ${(t.value / 2).toFixed(2)}) 
       <line x1="0" :y1="-9" x2="0" :y2="t + 9" class="joint" />
     </svg>
     <figcaption class="text-caption">
-      <div class="font-weight-medium">{{ title }}</div>
-      <div class="text-medium-emphasis">Seat {{ L(s.seat) }} from the edge, a {{ screwName(s.screw) }} {{ s.screwKind === 'castle' ? 'low-angle (Castle) #7 screw, coarse thread' : `#8 pocket screw, ${s.fine ? 'fine' : 'coarse'} thread` }}.</div>
-      <div :class="s.short || s.through ? 'text-warning' : 'text-medium-emphasis'">
-        {{ L(s.into) }} into the other part<template v-if="s.short">: too little to hold</template><template v-else-if="s.through">: it comes out of the far face</template>.
-      </div>
+      <span class="font-weight-medium">{{ title }}</span>
+      <span class="text-medium-emphasis"> · seat {{ L(s.seat) }} · {{ screwName(s.screw) }} {{ s.screwKind === 'castle' ? '#7' : '#8' }}{{ s.fine ? ' fine' : '' }} · </span>
+      <span :class="s.short || s.through ? 'text-warning' : 'text-medium-emphasis'">{{ L(s.into) }} in<template v-if="s.short">, too little</template><template v-else-if="s.through">, comes through</template></span>
     </figcaption>
   </figure>
 </template>

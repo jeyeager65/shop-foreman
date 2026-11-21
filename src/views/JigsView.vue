@@ -17,6 +17,7 @@ import StockCarveView from '@/components/StockCarveView.vue';
 import MmField from '@/components/MmField.vue';
 import PocketGuideInUse from '@/components/PocketGuideInUse.vue';
 import PocketSectionView from '@/components/PocketSectionView.vue';
+import HelpText from '@/components/HelpText.vue';
 import PanelTitle from '@/components/PanelTitle.vue';
 import { type JigField, type JigFile, type JigItem, type JigValues, handleWith, jigItems, jigRows, withCopies } from '@/jigs/catalog';
 import type { PrintObject } from '@/jigs/threemf';
@@ -72,6 +73,14 @@ const state = computed<Kept | undefined>(() => {
   return kept[i.id];
 });
 const values = computed<JigValues>(() => ({ ...item.value?.defaults, ...state.value?.values }));
+/** What the item keeps under "How this works". */
+const help = computed(() => {
+  try {
+    return item.value?.help?.(values.value) ?? [];
+  } catch {
+    return [];
+  }
+});
 /** The scrap test's pockets in section, each kind once. */
 const sections = computed(() => {
   try {
@@ -295,6 +304,7 @@ const madeWords = (i: JigItem) => (i.made === 'print' ? '3D print' : 'Cut on the
           </v-row>
           <v-alert v-for="p in problems" :key="p" type="error" variant="tonal" density="compact" class="mt-2" data-test="jig-problem">{{ p }}</v-alert>
           <div v-for="n in notes" :key="n" class="text-body-2 text-medium-emphasis mt-2" data-test="jig-note">{{ n }}</div>
+          <HelpText v-if="help.length" data-test="jig-help"><p v-for="h in help" :key="h" class="mb-2">{{ h }}</p></HelpText>
           <div class="d-flex flex-wrap align-center ga-2 mt-3">
             <v-btn v-if="changed" variant="text" size="small" data-test="jig-reset" @click="startAgain">{{ item.handleId ? 'Back to the shop profile\'s sizes' : 'Back to the usual sizes' }}</v-btn>
             <v-btn v-if="item.handleId && changed && !problems.length" variant="tonal" color="primary" size="small" data-test="jig-save" @click="saveToShop">Save to the shop profile</v-btn>
@@ -315,9 +325,6 @@ const madeWords = (i: JigItem) => (i.made === 'print' ? '3D print' : 'Cut on the
             <!-- The pockets in section, through each screw: what the angle and the seat do. -->
             <div v-if="sections.length" class="sections mt-3" data-test="jig-sections">
               <PocketSectionView v-for="sec in sections" :key="sec.title" :title="sec.title" :section="sec.section" />
-            </div>
-            <div v-if="sections.length" class="text-caption text-medium-emphasis mt-2">
-              Each drawn cut along its screw. The pocket and a channel are slots down the middle (drawn darker, dashed): the wood either side of them is still there.
             </div>
             <div class="text-caption text-medium-emphasis mt-2">
               The scrap as the file cuts it: the G-code below, carved with its bit. Drag to turn, scroll to zoom; the slider steps through the cut.

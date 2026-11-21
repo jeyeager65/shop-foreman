@@ -6,7 +6,7 @@
  * lists them (`#/jigs`) needs no project.
  */
 import { materialTitle, shopFor } from '@/design';
-import { DEFAULT_UNIT_PREFERENCES, formatLength } from '@/units';
+import { DEFAULT_UNIT_PREFERENCES } from '@/units';
 import { DEFAULT_DOOR_HANDLE } from '@/design/handles';
 import { handleHeight, handleLook, printedHandleProblems, pullProfile } from '@/design/printedHandle';
 import { GUIDE_STOCK, LOW_POCKET, POCKET, POCKET_SLEEVE, SLEEVE_LIMITS, arcShape, lowPocketScrew, sleeveGoesIn, sleeveWords } from '@/geometry/pocketHole';
@@ -18,7 +18,7 @@ import { INSERT_PLAY, INSERT_UNDER, type Caddy, type Dividers, type KnifeInsert,
 import { type DowelJig, type HingeCupJig, type PullTemplate, type ShelfPinJig, buildDowelJig, buildHingeCupJig, buildPullTemplate, buildShelfPinJig, dowelJigProblems, hingeCupJigProblems, pullTemplateProblems, shelfPinJigProblems } from './drillJigs';
 import { buildInstallKitObjects } from './installKit';
 import { type PocketCover, buildPocketCover, coverSize, pocketCoverProblems } from './pocketCover';
-import { type PocketSection, farthestSeat, pocketSection } from './pocketSection';
+import { type PocketSection, bothUnits, farthestSeat, pocketSection } from './pocketSection';
 import { type PocketGuide, buildPocketGuide, guideBitOut, guideStockName, pocketGuideProblems } from './pocketGuide';
 import { buildPrintedHandle } from './printedHandles';
 import { buildSlideJigObjects, slideJigProblems } from './slideJig';
@@ -94,6 +94,8 @@ export interface JigItem {
   carved?: boolean;
   /** More to say about it for these values, under its sizes: what the numbers come to. */
   notes?(values: JigValues): string[];
+  /** What is kept under the page's "How this works": explanations that need not be in sight. */
+  help?(values: JigValues): string[];
   /** The scrap test's pockets in section, each kind once, with the pockets it stands for. */
   sections?(values: JigValues): { title: string; section: PocketSection }[];
   /** The pocket-hole guide: what the page's moving picture of it in use is drawn from. */
@@ -217,12 +219,13 @@ export function jigItems(shop: ShopProfile): JigItem[] {
 
   const one = (template: 'supportBlock' | 'gapShim', params: Record<string, Mm>) => ({ template, params, quantity: 1, output: '3mf' as const });
   /**
-   * The scrap test's lengths, all in the shop's CNC and tooling unit (mm to start): a seat, a depth, the scrap. What is bought
-   * goes by the shop's sizes unit (a screw), and a bit or a material keeps its own name.
+   * The scrap test's lengths in both units (`bothUnits`): what the CNC cuts and what is measured on the scrap (a seat, a depth,
+   * the scrap) the shop's CNC unit first; what is bought (a screw, `screwName`) its sizes unit first. A bit or a material keeps
+   * its own name.
    */
-  const cnc = (mm: Mm) => formatLength(mm, { ...DEFAULT_UNIT_PREFERENCES, ...shop.units }.cnc);
+  const cnc = (mm: Mm) => bothUnits(mm, { ...DEFAULT_UNIT_PREFERENCES, ...shop.units }.cnc);
   /** A screw's length as it is bought: in the shop's sizes unit (1-1/2" in a shop in inches, 38.1 mm in one in mm). */
-  const screwName = (mm: Mm) => formatLength(mm, { ...DEFAULT_UNIT_PREFERENCES, ...shop.units }.sizes);
+  const screwName = (mm: Mm) => bothUnits(mm, { ...DEFAULT_UNIT_PREFERENCES, ...shop.units }.sizes);
   const ballNoseStock = shop.materialCatalog.map((m) => ({ title: `${materialTitle(m)}, ${cnc(m.measuredThickness.mm)} thick`, value: m.id }));
   const shimFields: JigField[] = [
     { key: 'thickness', label: 'Thickness', kind: 'mm' },
@@ -293,7 +296,7 @@ export function jigItems(shop: ShopProfile): JigItem[] {
     },
   ];  const testFields: JigField[] = [
     { key: 'materialId', label: 'Scrap of', kind: 'choice', choices: ballNoseStock },
-    { key: 'bit', label: 'Cut with', kind: 'choice', choices: bitChoices, hint: `One bit a scrap (to try another, cut another): a ball nose cuts ${POCKET.angleDeg}° pockets, a narrow end mill (the 1/8") ${POCKET.angleDeg}° or low-angle ones, a wider one (the 1/4") low-angle ones. A ledge round a ball nose's pocket takes an end mill too.` },
+    { key: 'bit', label: 'Cut with', kind: 'choice', choices: bitChoices, hint: 'One bit a scrap.' },
     {
       key: 'pockets',
       label: 'Pockets on the scrap',
@@ -301,7 +304,6 @@ export function jigItems(shop: ShopProfile): JigItem[] {
       row: 'Pocket',
       max: POCKET_TEST.most,
       columns: POCKET_COLUMNS,
-      hint: `Left to right along the scrap's front edge; two alike make a joint that does not turn. A channel: the screw lies in a slot ${cnc(POCKET.drill)} wide cut from the face out through the edge, nothing to drill. A low-angle pocket's seat is set as on a pocket-hole machine: a screw goes its length less the seat into the other part.`,
     },
   ];
   /** The pockets the page's rows come to, all with the bit chosen. */
@@ -438,7 +440,7 @@ export function jigItems(shop: ShopProfile): JigItem[] {
       name: 'Pocket-hole scrap test',
       group: 'Jigs',
       made: 'cnc',
-      about: `Pockets along the front edge of a piece of scrap ${cnc(POCKET_TEST.stock.y)} deep (${cnc(testSize().x)} long for two, ${cnc(POCKET_TEST.spacing)} more for each more), cut with one bit, to screw to another piece: as many as you want to try, each its own kind, up to ${POCKET_TEST.most}. At 15° (as a job cuts them), or low angle as a routed pocket-hole machine cuts them, the screw at 3° or 6° and the seat where you set it; each with a ledge for a printed cover or without, its pilot drilled with the guide or its screw's way cut open from the face.`,
+      about: `Pocket holes cut along the edge of a scrap (${cnc(POCKET_TEST.stock.y)} deep, ${cnc(testSize().x)} long for two pockets), to screw to another piece and see how they hold.`,
       untested: true,
       single: true,
       fields: testFields,
@@ -467,37 +469,60 @@ export function jigItems(shop: ShopProfile): JigItem[] {
       // No solid of its own: the page carves its G-code out of the scrap.
       build: async () => [],
       carved: true,
+      // In sight: how long it takes, and only what needs doing (another bit, a guide to print).
       notes: (values) => {
         const kinds = testKinds(values);
-        const drilled = kinds.some((k) => !k.channel);
-        const low = kinds.some((k) => k.bit === 'arc');
+        const low = kinds.some((k) => k.bit === 'arc' && !k.channel);
+        let minutes = '';
+        try {
+          const test = buildPocketTest(shopFor({ materials: shop.materialCatalog }, shop), String(values.materialId), kinds, String(values.bit));
+          minutes = `About ${Math.max(1, Math.round(test.pockets.reduce((n, p) => n + p.seconds, 0) / 60))} min to cut.`;
+        } catch {
+          // What cannot be made is said by the G-code card.
+        }
         return [
-          ...(() => {
-            try {
-              const test = buildPocketTest(shopFor({ materials: shop.materialCatalog }, shop), String(values.materialId), kinds, String(values.bit));
-              const chosen = scrapBits.find((t) => t.id === values.bit);
-              return test.pockets.map((p, i) => `Pocket ${i + 1}. ${kindWords(p, test.thickness, chosen && !isBallNose(chosen) ? cutDiameter(chosen) : lowBitWidth)}${p.channel ? `; its screw's way a channel ${cnc(POCKET.drill)} wide cut open from the face, nothing to drill` : ''}. About ${Math.round(p.seconds)} s.`);
-            } catch {
-              return [];
-            }
-          })(),
+          minutes,
           ...otherBits(values).map((w) => `Another bit: ${w}.`),
-          ...(drilled
-            ? [low ? 'A low-angle pocket takes its own guide: print the pocket-hole drill guide for its angle and seat (one for each).' : 'The same guide drills every 15° pocket: its key stands between the upright walls. One cover fits every ledge.']
-            : []),
-          kinds.some((k) => k.channel)
-            ? 'A channel: its floor runs along the screw\'s underside, so the screw leaves the edge at mid-thickness as a drilled one does. Look at how straight the screws go in, and break the joint to see how it holds against one drilled.'
-            : '',
-          `Zero at the scrap's front-left corner: its front edge is the edge the screws leave through${drilled ? ", and the edge the guide's leg goes against" : ''}.`,
-          'What to look for: the seat (does the washer head sit flat on it), tear-out where the bit comes through it, and the joint pulled tight.',
+          ...(low ? ['Drilled low-angle pockets take their own guide: print the pocket-hole drill guide for each angle and seat.'] : []),
         ].filter(Boolean);
       },
-      gcode: (values, _quantity, machineId) => {
+      // Kept under "How this works": each kind once, then where to zero and what to look for.
+      help: (values) => {
+        const kinds = testKinds(values);
+        const drilled = kinds.some((k) => !k.channel);
+        const words: string[] = [];
+        try {
+          const test = buildPocketTest(shopFor({ materials: shop.materialCatalog }, shop), String(values.materialId), kinds, String(values.bit));
+          const chosen = scrapBits.find((t) => t.id === values.bit);
+          const width = chosen && !isBallNose(chosen) ? cutDiameter(chosen) : lowBitWidth;
+          const seen = new Map<string, number[]>();
+          test.pockets.forEach((p, i) => {
+            const key = `${kindWords(p, test.thickness, width)}|${!!p.channel}`;
+            seen.set(key, [...(seen.get(key) ?? []), i + 1]);
+          });
+          for (const [key, list] of seen) {
+            const [text, channel] = key.split('|');
+            const names = list.length === 1 ? `Pocket ${list[0]}` : `Pockets ${list.slice(0, -1).join(', ')} and ${list.at(-1)}`;
+            words.push(`${names}. ${text}${channel === 'true' ? `; the screw's way a channel ${cnc(POCKET.drill)} wide, cut open from the face, nothing to drill` : ''}.`);
+          }
+        } catch {
+          // As above.
+        }
+        return [
+          ...words,
+          `Pockets go left to right along the scrap's front edge; two alike make a joint that does not turn. A low-angle pocket's seat is set as on a pocket-hole machine: a screw goes its length less the seat into the other part.`,
+          'Each drawing under the picture is cut along its screw. The pocket and a channel are slots down the middle (drawn darker, dashed): the wood either side of them is still there.',
+          ...(kinds.some((k) => k.channel) ? ["A channel's floor runs along the screw's underside, so the screw leaves the edge at mid-thickness as a drilled one does. Look at how straight the screws go in, and break the joint to see how it holds against one drilled."] : []),
+          `Zero at the scrap's front-left corner: its front edge is the edge the screws leave through${drilled ? ", and the edge the guide's leg goes against" : ''}.`,
+          'What to look for: the seat (does the head sit flat on it), tear-out where the bit comes through it, and the joint pulled tight.',
+        ];
+      },      gcode: (values, _quantity, machineId) => {
         const kinds = testKinds(values);
         const test = buildPocketTest(shopFor({ materials: shop.materialCatalog, machineId }, shop), String(values.materialId), kinds, String(values.bit));
         const drill = kinds.some((k) => !k.channel) ? `; the pilot bit ${cnc(test.bitOutOfChuck)} out of the chuck` : '; nothing to drill';
         return [{ name: POCKET_TEST_FILE, text: test.text, note: `scrap at least ${cnc(test.stock.x)} × ${cnc(test.stock.y)}; ${test.pockets.length} pockets; cut with ${test.tools.map((t) => t.name).join(' then ')}${drill}` }];
-      },      fileName: POCKET_TEST_FILE,
+      },
+      fileName: POCKET_TEST_FILE,
     },
     {
       id: 'pocket-cover',
