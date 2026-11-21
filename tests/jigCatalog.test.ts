@@ -134,15 +134,19 @@ describe('the catalog of things that are not cabinet parts', () => {
     expect(file!.text).toContain('G21');
     expect(file!.note).toBe('scrap at least 160 mm (≈6-5/16") × 100 mm (3-15/16"); 2 pockets; cut with 1/8" ball nose; the pilot bit 38.7 mm (≈1-1/2") out of the chuck');
     // Four pockets with the ball nose, two with a ledge: the end mill cuts the ledges first, then the ball nose the pockets.
-    const four = { ...test.defaults, pockets: JSON.stringify([{ ledge: 'no' }, { ledge: 'no' }, { ledge: 'endmill-1-8' }, { ledge: 'endmill-1-8' }]) };
+    const four = { ...test.defaults, pockets: JSON.stringify([{ ledge: 'no' }, { ledge: 'no' }, { ledge: 'yes' }, { ledge: 'yes' }]) };
     const [every] = test.gcode!(four, 1, 'lowrider-3');
     expect(every!.note).toMatch(/^scrap at least 240 mm \(≈9-7\/16"\) × 100 mm \(3-15\/16"\); 4 pockets; cut with 1\/8" end mill then 1\/8" ball nose/);
     // Each kind once under How this works: the two plain pockets, then the two with a ledge.
     expect(test.help!(four).slice(0, 2).map((n) => n.slice(0, 18))).toEqual(['Pockets 1 and 2. T', 'Pockets 3 and 4. T']);
-    // A pocket's ledge: with the scrap's own end mill (just no or yes), or round a ball nose's pocket with an end mill chosen.
+    // A pocket's ledge is a tick; on a ball nose's scrap with a ledge ticked, the end mill that cuts the ledges is chosen once.
     const ledge = test.fields.find((f) => f.key === 'pockets')!.columns!.find((c) => c.key === 'ledge')!;
-    expect(ledge.choicesFor!(test.defaults).map((c) => c.value)).toEqual(['no', 'endmill-1-8', 'endmill-1-4']);
-    expect(ledge.choicesFor!({ ...test.defaults, bit: 'endmill-1-8' }).map((c) => c.title)).toEqual(['No', 'Yes']);
+    expect(ledge.check).toBe(true);
+    const ledgeBit = test.fields.find((f) => f.key === 'ledgeBit')!;
+    expect(ledgeBit.choices!.map((c) => c.value)).toEqual(['endmill-1-8', 'endmill-1-4']);
+    expect(ledgeBit.when!(four)).toBe(true);
+    expect(ledgeBit.when!(test.defaults)).toBe(false);
+    expect(ledgeBit.when!({ ...four, bit: 'endmill-1-8' })).toBe(false);
     // It has no solid: the page carves its G-code.
     expect(test.carved).toBe(true);
     const guide = item('pocket-guide');

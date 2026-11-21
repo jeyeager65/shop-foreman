@@ -18,7 +18,7 @@ import { INSERT_PLAY, INSERT_UNDER, type Caddy, type Dividers, type KnifeInsert,
 import { type DowelJig, type HingeCupJig, type PullTemplate, type ShelfPinJig, buildDowelJig, buildHingeCupJig, buildPullTemplate, buildShelfPinJig, dowelJigProblems, hingeCupJigProblems, pullTemplateProblems, shelfPinJigProblems } from './drillJigs';
 import { buildInstallKitObjects } from './installKit';
 import { type PocketCover, buildPocketCover, coverSize, pocketCoverProblems } from './pocketCover';
-import { type PocketSection, bothUnits, farthestSeat, pocketSection } from './pocketSection';
+import { POCKET_SCREW, type PocketSection, bothUnits, farthestSeat, pocketSection } from './pocketSection';
 import { type PocketGuide, buildPocketGuide, guideBitOut, guideStockName, pocketGuideProblems } from './pocketGuide';
 import { buildPrintedHandle } from './printedHandles';
 import { buildSlideJigObjects, slideJigProblems } from './slideJig';
@@ -36,7 +36,9 @@ export interface JigField {
   kind: 'mm' | 'count' | 'choice' | 'rows';
   choices?: { title: string; value: string }[];
   /** A column shows on a row only where `when` says, given the row and the page's other values. */
-  columns?: { key: string; label: string; choices: { title: string; value: string }[]; choicesFor?(values: JigValues): { title: string; value: string }[]; when?(row: Record<string, string>, values: JigValues): boolean }[];
+  /** A choice's `short` title is what its button says, where a column's few choices are buttons. `check`: a tick box, its value `yes` or `no`. */
+  /** `length`: a length typed freely with its unit switch, kept in mm under `key` and its unit under `key` + `Unit`. */
+  columns?: { key: string; label: string; check?: boolean; length?: boolean; /** A length's usual value, which a button in its field puts back. */ reset?: Mm; choices: { title: string; value: string; short?: string }[]; choicesFor?(values: JigValues, row?: Record<string, string>): { title: string; value: string; short?: string }[]; when?(row: Record<string, string>, values: JigValues): boolean }[];
   /** A row's name ("Pocket"), and the most rows. */
   row?: string;
   max?: number;
@@ -238,18 +240,16 @@ export function jigItems(shop: ShopProfile): JigItem[] {
   const lowBit = lowPocketBit(shop);
   const lowBitWidth = lowBit ? cutDiameter(lowBit) : 6.35;
   /** The seat's distance from the edge, which is set as on a pocket-hole machine. */
-  const seatField: JigField = { key: 'seat', label: 'Seat from the edge', kind: 'mm', hint: `Along the screw, from the edge to where its head bears: ${LOW_POCKET.seatRange.min} to ${LOW_POCKET.seatRange.max} mm. A screw goes its length less this into the other part.` };
+  const seatField: JigField = { key: 'seat', label: 'Seat', kind: 'mm', hint: `Along the screw, from the edge to where its head bears: ${LOW_POCKET.seatRange.min} to ${LOW_POCKET.seatRange.max} mm. A screw goes its length less this into the other part.` };
   const seatOf = (values: JigValues): Mm => (Number(values.seat) > 0 ? Number(values.seat) : LOW_POCKET.seat);
-  /** The seat distances a low-angle pocket may be tried at, as on a pocket-hole machine: across its range, the usual one among them. */
-  const SEATS = [12, 14, 16, 18, 20, LOW_POCKET.seat, 25, 28, 32, 36, 40, LOW_POCKET.seatRange.max].filter((s) => s >= LOW_POCKET.seatRange.min && s <= LOW_POCKET.seatRange.max);
-  const seatTitle = (s: Mm) => `${cnc(s)}${Math.abs(s - LOW_POCKET.seat) < 0.01 ? ' (the usual)' : ''}`;
   /** The bits a scrap is cut with, one a scrap: a ball nose cuts 15° pockets; a narrow end mill 15° or low-angle ones; one wider than half the bore, low-angle ones. */
   const scrapBits = [...testBits, ...(lowBit && !testBits.some((t) => t.id === lowBit.id) ? [lowBit] : [])];
   const bitKindOf = (id: unknown): 'ball' | 'narrow' | 'wide' => {
     const tool = scrapBits.find((t) => t.id === id);
     return !tool || isBallNose(tool) ? 'ball' : cutDiameter(tool) <= POCKET.bore / 2 + 1e-9 ? 'narrow' : 'wide';
   };
-  const ANGLES = { ball: [POCKET.angleDeg], narrow: [POCKET.angleDeg, ...LOW_POCKET.angles], wide: [...LOW_POCKET.angles] };
+  // In number order: 3°, 6°, 15°.
+  const ANGLES = { ball: [POCKET.angleDeg], narrow: [...LOW_POCKET.angles, POCKET.angleDeg], wide: [...LOW_POCKET.angles] };
   const anglesFor = (values: JigValues) => ANGLES[bitKindOf(values.bit)];
   /** A row's angle: its own where the bit can cut it, else the bit's first. */
   const angleOf = (row: Record<string, string>, values: JigValues): number => anglesFor(values).find((a) => String(a) === row.angle) ?? anglesFor(values)[0]!;
@@ -265,38 +265,41 @@ export function jigItems(shop: ShopProfile): JigItem[] {
       key: 'angle',
       label: 'Angle',
       choices: [],
-      choicesFor: (values) => anglesFor(values).map((a) => ({ title: a === POCKET.angleDeg ? `${a}°` : `${a}°, low angle`, value: String(a) })),
+      choicesFor: (values) => anglesFor(values).map((a) => ({ title: `${a}°`, value: String(a) })),
       when: (_row, values) => anglesFor(values).length > 1,
     },
-    // Only seats that leave the screw enough of itself in the other part, in the scrap's thickness.
-    {
-      key: 'seat',
-      label: 'Seat from the edge',
-      choices: [],
-      choicesFor: (values) => SEATS.filter((s) => s <= farthestSeat(scrapThickness(values)) + 0.01).map((s) => ({ title: seatTitle(s), value: String(s) })),
-      when: lowRow,
-    },
-    // A 15° pocket's ledge with an end mill of its own (the cover's corners follow the bit); a low-angle one's with the pocket's bit.
+    // Typed, as in Setup and on Plan, with its unit switch: from the edge along the screw.
+    { key: 'seat', label: 'Seat', length: true, reset: LOW_POCKET.seat, choices: [], when: lowRow },
     // A ledge is cut with the scrap's own end mill; round a ball nose's pocket, which cannot cut a flat one, with an end mill chosen here.
     {
+      // A tick: cut with the scrap's own end mill, or round a ball nose's pocket with the end mill chosen above the table.
       key: 'ledge',
-      label: 'Ledge for a cover',
-      choices: [],
-      choicesFor: (values) => [{ title: 'No', value: 'no' }, ...(bitKindOf(values.bit) === 'ball' ? ledgeBits.map((t) => ({ title: `Yes, ${t.name}`, value: t.id })) : [{ title: 'Yes', value: String(values.bit) }])],
-      when: (row, values) => !lowRow(row, values),
+      label: 'Ledge',
+      check: true,
+      choices: [
+        { title: 'No', value: 'no' },
+        { title: 'Yes', value: 'yes' },
+      ],
     },
-    { key: 'ledgeLow', label: 'Ledge for a cover', choices: [{ title: 'No', value: 'no' }, { title: 'Yes', value: 'yes' }], when: lowRow },
     {
       key: 'way',
-      label: "The screw's way",
+      label: "Screw's way",
       choices: [
-        { title: 'Drilled, with the guide', value: 'drilled' },
-        { title: 'Channel, nothing drilled', value: 'channel' },
+        { title: 'Drilled, with the guide', short: 'Drill', value: 'drilled' },
+        { title: 'A slot cut open from the face, nothing drilled', short: 'Slot', value: 'channel' },
       ],
     },
   ];  const testFields: JigField[] = [
     { key: 'materialId', label: 'Scrap of', kind: 'choice', choices: ballNoseStock },
     { key: 'bit', label: 'Cut with', kind: 'choice', choices: bitChoices, hint: 'One bit a scrap.' },
+    // A ball nose cannot cut a flat ledge: on its scrap, the end mill that cuts the ledges.
+    {
+      key: 'ledgeBit',
+      label: 'Ledges cut with',
+      kind: 'choice',
+      choices: ledgeBits.map((t) => ({ title: t.name, value: t.id })),
+      when: (values) => bitKindOf(values.bit) === 'ball' && jigRows(values, 'pockets').some((r) => r.ledge === 'yes'),
+    },
     {
       key: 'pockets',
       label: 'Pockets on the scrap',
@@ -313,9 +316,10 @@ export function jigItems(shop: ShopProfile): JigItem[] {
       const channel = row.way === 'channel' ? { channel: true } : {};
       if (lowRow(row, values)) {
         const angle = LOW_POCKET.angles.find((a) => a === angleOf(row, values)) ?? LOW_POCKET.angles[0];
-        return { ...channel, bit: 'arc', ledge: row.ledgeLow === 'yes', angleDeg: angle, seat: Number(row.seat) > 0 ? Number(row.seat) : LOW_POCKET.seat };
+        return { ...channel, bit: 'arc', ledge: row.ledge === 'yes', angleDeg: angle, seat: Number(row.seat) > 0 ? Number(row.seat) : LOW_POCKET.seat };
       }
-      const ledgeBit = ledgeBits.find((t) => t.id === row.ledge);
+      // A ledge round a 15° pocket: the scrap's own end mill, or on a ball nose's scrap the end mill chosen for ledges.
+      const ledgeBit = row.ledge === 'yes' ? (tool && isBallNose(tool) ? (ledgeBits.find((t) => t.id === values.ledgeBit) ?? ledgeBits[0]) : tool) : undefined;
       return { ...channel, bit: tool && isBallNose(tool) ? 'ball' : 'flat', ledge: !!ledgeBit, ...(ledgeBit ? { ledgeBitId: ledgeBit.id } : {}) };
     });
   };
@@ -331,7 +335,7 @@ export function jigItems(shop: ShopProfile): JigItem[] {
     if (tool && cutDiameter(tool) > POCKET.drill + 1e-9 && kinds.some((k) => k.channel)) out.push(`the ${tool.name} is wider than the ${POCKET.drill} mm pilot: a narrower end mill cuts the channels`);
     return out;
   };  /** Two pockets as a job cuts them, drilled: where the test starts. */
-  const TEST_START = JSON.stringify(Array.from({ length: POCKET_TEST.count }, () => ({ angle: String(POCKET.angleDeg), seat: String(LOW_POCKET.seat), ledge: 'no', ledgeLow: 'no', way: 'drilled' })));  /** The screw for a low-angle pocket in stock this thick, where it is known. */
+  const TEST_START = JSON.stringify(Array.from({ length: POCKET_TEST.count }, () => ({ angle: String(POCKET.angleDeg), seat: String(LOW_POCKET.seat), seatUnit: 'in', ledge: 'no', way: 'drilled' })));  /** The screw for a low-angle pocket in stock this thick, where it is known. */
   const screwWords = (thickness: Mm, seat: Mm): string => {
     const screw = lowPocketScrew(thickness);
     return screw ? `. In this stock it takes ${screwName(screw)} screws: with the seat ${cnc(seat)} from the edge, one goes ${cnc(screw - seat)} into the other part` : '';
@@ -461,10 +465,11 @@ export function jigItems(shop: ShopProfile): JigItem[] {
           return { title, section: pocketSection(scrapThickness(values), k.bit === 'arc' ? (k.angleDeg ?? 3) : POCKET.angleDeg, k.seat, width, !!k.channel, shop.materialCatalog.find((m) => m.id === values.materialId)?.groupId === 'solid-wood') };
         });
       },
-      defaults: { materialId: testStock?.id ?? '', bit: scrapBits[0]?.id ?? '', pockets: TEST_START },
+      defaults: { materialId: testStock?.id ?? '', bit: scrapBits[0]?.id ?? '', ledgeBit: ledgeBits[0]?.id ?? '', pockets: TEST_START },
       problems: (values) => [
         ...(shop.materialCatalog.some((m) => m.id === values.materialId) ? [] : ["Choose the scrap's material."]),
         ...(jigRows(values, 'pockets').length ? [] : ['Add a pocket to try.']),
+        ...testKinds(values).flatMap((k, i) => (k.bit === 'arc' && (k.seat! < LOW_POCKET.seatRange.min - 1e-6 || k.seat! > LOW_POCKET.seatRange.max + 1e-6) ? [`Pocket ${i + 1}: a seat is ${cnc(LOW_POCKET.seatRange.min)} to ${cnc(LOW_POCKET.seatRange.max)} from the edge.`] : [])),
       ],
       // No solid of its own: the page carves its G-code out of the scrap.
       build: async () => [],
@@ -483,6 +488,11 @@ export function jigItems(shop: ShopProfile): JigItem[] {
         return [
           minutes,
           ...otherBits(values).map((w) => `Another bit: ${w}.`),
+          // A seat that leaves too little of the screw in the other part.
+          ...kinds.flatMap((k, i) => {
+            if (k.bit !== 'arc' || k.seat! <= farthestSeat(scrapThickness(values)) + 0.01) return [];
+            return [`Pocket ${i + 1}: that seat leaves less than ${cnc(POCKET_SCREW.leastInto)} of the screw in the other part.`];
+          }),
           ...(low ? ['Drilled low-angle pockets take their own guide: print the pocket-hole drill guide for each angle and seat.'] : []),
         ].filter(Boolean);
       },

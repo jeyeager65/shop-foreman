@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiRestore } from '@mdi/js';
 import { computed, ref, watch } from 'vue';
 import type { Length } from '@/model';
 import UnitButton from '@/components/UnitButton.vue';
@@ -28,6 +29,10 @@ const props = withDefaults(
     placeholderMm?: number;
     /** What an empty field stands for, in words ("in the middle"): shown faintly in it, in place of a hint under it. */
     emptyText?: string;
+    /** Compact for a table's cell: no floating label (the column names it, `label` is read aloud), its unit inside. */
+    bare?: boolean;
+    /** The usual value, in mm: where the value differs, a button inside the field puts it back. */
+    resetMm?: number;
   }>(),
   { defaultUnit: 'in' },
 );
@@ -45,6 +50,8 @@ watch(
   },
 );
 const hintText = computed(() => [props.tuneMe ? 'Placeholder: tune me' : '', props.hint ?? ''].filter(Boolean).join(' · '));
+/** The reset button's words: the usual value in the unit shown. */
+const resetTitle = computed(() => (props.resetMm === undefined ? '' : `Back to the usual, ${lengthText(props.resetMm, unit.value).text}${unit.value === 'in' ? '"' : ' mm'}`));
 const placeholder = computed(() => (props.placeholderMm !== undefined ? lengthText(props.placeholderMm, unit.value).text : props.emptyText));
 watch(shown, (s) => {
   text.value = s.text;
@@ -106,7 +113,10 @@ function setUnit(next: 'in' | 'mm') {
   <v-text-field
     v-else
     v-model="text"
-    :label="label"
+    :label="bare ? undefined : label"
+    :aria-label="label"
+    :density="bare ? 'compact' : undefined"
+    :hide-details="bare && !error ? true : undefined"
     :disabled="disabled"
     :placeholder="placeholder"
     :persistent-placeholder="placeholder !== undefined"
@@ -121,6 +131,18 @@ function setUnit(next: 'in' | 'mm') {
       <span class="about" :title="exact" data-test="about">≈</span>
     </template>
     <template #append-inner>
+      <!-- Back to the usual value, where it differs. -->
+      <v-btn
+        v-if="resetMm !== undefined && modelValue && Math.abs(modelValue.mm - resetMm) > 0.01"
+        :icon="mdiRestore"
+        variant="text"
+        size="x-small"
+        density="comfortable"
+        :title="resetTitle"
+        aria-label="Back to the usual value"
+        data-test="length-reset"
+        @click.stop="emit('update:modelValue', { mm: resetMm, unit })"
+      />
       <!-- One small button: it says the unit shown, and a click shows (and keeps) the other. -->
       <UnitButton :unit="unit" :title="`Shown in ${unit === 'in' ? 'inches' : 'mm'}. Click for ${other === 'in' ? 'inches' : 'mm'}: converts the value.`" :aria-label="`Unit: ${unit}. Change to ${other}`" data-test="unit" @click.stop="setUnit(other)" />
     </template>

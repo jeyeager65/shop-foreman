@@ -36,10 +36,10 @@ describe('a pocket in section', () => {
     expect(farthestSeat(t)).toBeCloseTo(1.5 * MM_PER_INCH - POCKET_SCREW.leastInto, 6);
     const profile = createStarterShopProfile();
     const test = jigItems(profile).find((i) => i.id === 'pocket-test')!;
-    const seats = test.fields.find((f) => f.key === 'pockets')!.columns!.find((c) => c.key === 'seat')!;
-    const offered = seats.choicesFor!(test.defaults).map((c) => Number(c.value));
-    expect(Math.max(...offered)).toBeLessThanOrEqual(farthestSeat(t) + 0.01);
-    expect(offered).toContain(LOW_POCKET.seat);
+    // A seat typed further out than that is warned of, in sight.
+    const far = { ...test.defaults, bit: 'endmill-1-8', pockets: JSON.stringify([{ angle: '3', seat: '30' }]) };
+    expect(test.notes!(far).some((n) => /^Pocket 1: that seat leaves less than 15.9 mm/.test(n))).toBe(true);
+    expect(test.notes!({ ...far, pockets: JSON.stringify([{ angle: '3', seat: String(LOW_POCKET.seat) }]) }).some((n) => /that seat leaves less/.test(n))).toBe(false);
     // And the page draws each kind once.
     const values = { ...test.defaults, bit: 'endmill-1-8', pockets: JSON.stringify([{ angle: '3' }, { angle: '15' }, { angle: '15' }]) };
     expect(test.sections!(values).map((s) => s.title)).toEqual(['Pocket 1', 'Pockets 2 and 3']);

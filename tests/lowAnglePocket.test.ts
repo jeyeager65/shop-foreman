@@ -188,9 +188,11 @@ describe('the scrap test with low-angle pockets', () => {
     expect(bits.choices!.map((c) => c.value)).toEqual(expect.arrayContaining(['endmill-1-4', 'endmill-1-8']));
     const angle = test.fields.find((f) => f.key === 'pockets')!.columns!.find((c) => c.key === 'angle')!;
     expect(angle.choicesFor!({ ...test.defaults, bit: 'endmill-1-4' }).map((c) => c.value)).toEqual(['3', '6']);
-    expect(angle.choicesFor!({ ...test.defaults, bit: 'endmill-1-8' }).map((c) => c.value)).toEqual(['15', '3', '6']);
+    expect(angle.choicesFor!({ ...test.defaults, bit: 'endmill-1-8' }).map((c) => c.value)).toEqual(['3', '6', '15']);
     const seats = test.fields.find((f) => f.key === 'pockets')!.columns!.find((c) => c.key === 'seat')!;
-    expect(seats.choicesFor!({ ...test.defaults, bit: 'endmill-1-4' }).length).toBeGreaterThan(3);
+    // Typed, as in Setup and on Plan: a seat outside the range is refused.
+    expect(seats.length).toBe(true);
+    expect(test.problems({ ...test.defaults, bit: 'endmill-1-4', pockets: JSON.stringify([{ angle: '3', seat: '50' }]) })).toEqual(['Pocket 1: a seat is 12 mm (≈15/32") to 45 mm (≈1-3/4") from the edge.']);
     const values = { ...test.defaults, bit: 'endmill-1-4', pockets: JSON.stringify([{ angle: '3' }, { angle: '3' }]) };
     const files = test.gcode!(values, 1, profile.activeMachineId);
     expect(files[0]!.text).toContain('2 low-angle pockets');

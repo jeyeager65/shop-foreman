@@ -15,6 +15,7 @@ import { useRoute, useRouter } from 'vue-router';
 import MeshView from '@/components/MeshView.vue';
 import StockCarveView from '@/components/StockCarveView.vue';
 import MmField from '@/components/MmField.vue';
+import LengthField from '@/components/LengthField.vue';
 import PocketGuideInUse from '@/components/PocketGuideInUse.vue';
 import PocketSectionView from '@/components/PocketSectionView.vue';
 import HelpText from '@/components/HelpText.vue';
@@ -22,7 +23,7 @@ import PanelTitle from '@/components/PanelTitle.vue';
 import { type JigField, type JigFile, type JigItem, type JigValues, handleWith, jigItems, jigRows, withCopies } from '@/jigs/catalog';
 import type { PrintObject } from '@/jigs/threemf';
 import { write3mf } from '@/jigs/threemf';
-import type { Handle, ShownIn } from '@/model';
+import type { Handle, Length, ShownIn } from '@/model';
 import { useAppStore } from '@/stores/app';
 import { download } from '@/ui/format';
 import { meshPicture } from '@/ui/meshScene';
@@ -93,10 +94,20 @@ const sections = computed(() => {
 const rowsOf = (f: JigField) => jigRows(values.value, f.key);
 const setRows = (f: JigField, rows: Record<string, string>[]) => set(f.key, JSON.stringify(rows));
 const setCell = (f: JigField, i: number, key: string, value: string) => setRows(f, rowsOf(f).map((row, k) => (k === i ? { ...row, [key]: value } : row)));
+/** An item with a table of rows gets the wider half of the page for its sizes. */
+const hasTable = computed(() => !!item.value?.fields.some((f) => f.kind === 'rows'));
+/** A column's choices now (some follow the page's other values). */
+const choicesOf = (col: NonNullable<JigField['columns']>[number], row?: Record<string, string>) => (col.choicesFor ? col.choicesFor(values.value, row) : col.choices);
+/** The columns some row shows: one shown on no row (the angle with a ball nose, the seat with no low-angle pocket) is left out. */
+const shownColumns = (f: JigField) => (f.columns ?? []).filter((c) => !c.when || rowsOf(f).some((row) => c.when!(row, values.value)));
 /** What a row shows in a column: its own value where that is one of the column's choices now, else the first. */
 const cellValue = (col: NonNullable<JigField['columns']>[number], row: Record<string, string>) => {
-  const items = col.choicesFor ? col.choicesFor(values.value) : col.choices;
+  const items = choicesOf(col, row);
   return items.some((c) => c.value === row[col.key]) ? row[col.key] : items[0]?.value;
+};
+/** A length typed in a row: its mm, and the unit it was typed in. */
+const setLengthCell = (f: JigField, i: number, key: string, value: Length | null) => {
+  if (value) setRows(f, rowsOf(f).map((row, k) => (k === i ? { ...row, [key]: String(value.mm), [`Unit`]: value.unit } : row)));
 };
 const addRow = (f: JigField) => setRows(f, [...rowsOf(f), { ...(rowsOf(f).at(-1) ?? {}) }]);
 const removeRow = (f: JigField, i: number) => setRows(f, rowsOf(f).filter((_, k) => k !== i));
@@ -249,34 +260,86 @@ const madeWords = (i: JigItem) => (i.made === 'print' ? '3D print' : 'Cut on the
       Not yet printed, cut or used: every size here is a first guess (tune me). Make one and try it before making many.
     </v-alert>
     <v-row>
-      <v-col cols="12" md="5">
+      <v-col cols="12" :md="hasTable ? 7 : 5" :lg="hasTable ? 6 : 5" :xl="hasTable ? 5 : 5">
         <v-card class="pa-5">
           <PanelTitle icon="details">Sizes</PanelTitle>
           <v-row density="compact">
             <v-col v-for="f in fields" :key="f.key" cols="12" :sm="f.kind === 'rows' ? 12 : 6">
-              <!-- A list: a row each, its choices side by side; a row added copies the last. -->
+              <!-- A list as a table: a row each, a column each choice; two or three choices as buttons, more as a menu. -->
               <div v-if="f.kind === 'rows'" :data-test="`jig-field-${f.key}`">
                 <div class="text-body-2 mb-2">{{ f.label }}</div>
-                <div v-for="(row, i) in rowsOf(f)" :key="i" class="jig-row" data-test="jig-row">
-                  <span class="text-body-2 text-medium-emphasis jig-row-name">{{ f.row }} {{ i + 1 }}</span>
-                  <v-select
-                    v-for="col in (f.columns ?? []).filter((c) => !c.when || c.when(row, values))"
-                    :key="col.key"
-                    :model-value="cellValue(col, row)"
-                    :items="col.choicesFor ? col.choicesFor(values) : col.choices"
-                    :label="col.label"
-                    density="compact"
-                    hide-details
-                    class="jig-row-cell"
-                    :data-test="`jig-row-${col.key}`"
-                    @update:model-value="setCell(f, i, col.key, $event)"
-                  />
-                  <v-btn :icon="mdiTrashCanOutline" variant="text" size="small" :disabled="rowsOf(f).length < 2" :aria-label="`Remove ${f.row?.toLowerCase()} ${i + 1}`" data-test="jig-row-remove" @click="removeRow(f, i)" />
+                <div class="jig-table-wrap">
+                  <table class="jig-table">
+                    <thead>
+                      <tr>
+                        <th />
+                        <th v-for="col in shownColumns(f)" :key="col.key" class="text-caption text-medium-emphasis">{{ col.label }}</th>
+                        <th />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(row, i) in rowsOf(f)" :key="i" data-test="jig-row">
+                        <td class="text-body-2 text-medium-emphasis">{{ i + 1 }}</td>
+                        <td v-for="col in shownColumns(f)" :key="col.key">
+                          <template v-if="!col.when || col.when(row, values)">
+                            <LengthField
+                              v-if="col.length"
+                              bare
+                              :reset-mm="col.reset"
+                              :model-value="{ mm: Number(row[col.key]) || 0, unit: row[`Unit`] === 'mm' ? 'mm' : 'in' }"
+                              :label="col.label"
+                              class="jig-cell-length"
+                              :data-test="`jig-row-${col.key}`"
+                              @update:model-value="setLengthCell(f, i, col.key, $event)"
+                            />
+                            <v-checkbox-btn
+                              v-else-if="col.check"
+                              :model-value="row[col.key] === 'yes'"
+                              density="compact"
+                              color="primary"
+                              :aria-label="col.label"
+                              :data-test="`jig-row-${col.key}`"
+                              @update:model-value="setCell(f, i, col.key, $event ? 'yes' : 'no')"
+                            />
+                            <v-btn-toggle
+                              v-else-if="choicesOf(col, row).length <= 3"
+                              :model-value="cellValue(col, row)"
+                              mandatory
+                              divided
+                              density="compact"
+                              variant="outlined"
+                              color="primary"
+                              class="jig-toggle"
+                              :data-test="`jig-row-${col.key}`"
+                              @update:model-value="setCell(f, i, col.key, $event)"
+                            >
+                              <v-btn v-for="c in choicesOf(col, row)" :key="c.value" :value="c.value" size="small">{{ c.short ?? c.title }}</v-btn>
+                            </v-btn-toggle>
+                            <v-select
+                              v-else
+                              :model-value="cellValue(col, row)"
+                              :items="choicesOf(col, row)"
+                              density="compact"
+                              hide-details
+                              variant="outlined"
+                              class="jig-cell-select"
+                              :aria-label="col.label"
+                              :data-test="`jig-row-${col.key}`"
+                              @update:model-value="setCell(f, i, col.key, $event)"
+                            />
+                          </template>
+                          <span v-else class="text-medium-emphasis">—</span>
+                        </td>
+                        <td>
+                          <v-btn :icon="mdiTrashCanOutline" variant="text" size="small" :disabled="rowsOf(f).length < 2" :aria-label="`Remove ${f.row?.toLowerCase()} ${i + 1}`" data-test="jig-row-remove" @click="removeRow(f, i)" />
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
-                <v-btn v-if="rowsOf(f).length < (f.max ?? 6)" size="small" variant="tonal" :prepend-icon="mdiPlus" data-test="jig-row-add" @click="addRow(f)">Add a {{ (f.row ?? 'row').toLowerCase() }}</v-btn>
+                <v-btn v-if="rowsOf(f).length < (f.max ?? 6)" size="small" variant="tonal" :prepend-icon="mdiPlus" class="mt-2" data-test="jig-row-add" @click="addRow(f)">Add a {{ (f.row ?? 'row').toLowerCase() }}</v-btn>
                 <div v-if="f.hint" class="text-caption text-medium-emphasis mt-2">{{ f.hint }}</div>
-              </div>
-              <MmField
+              </div>              <MmField
                 v-else-if="f.kind === 'mm'"
                 :model-value="Number(values[f.key])"
                 :owner="state"
@@ -316,7 +379,7 @@ const madeWords = (i: JigItem) => (i.made === 'print' ? '3D print' : 'Cut on the
           </div>
         </v-card>
       </v-col>
-      <v-col cols="12" md="7">
+      <v-col cols="12" :md="hasTable ? 5 : 7" :lg="hasTable ? 6 : 7" :xl="hasTable ? 7 : 7">
         <v-card class="pa-5 mb-4">
           <PanelTitle icon="view">Picture</PanelTitle>
           <MeshView v-if="solids.length" :objects="solids" />
@@ -422,6 +485,34 @@ const madeWords = (i: JigItem) => (i.made === 'print' ? '3D print' : 'Cut on the
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 12px;
+}
+/* A list field as a table: a row each, a column each choice; it scrolls sideways on a narrow screen. */
+.jig-table-wrap {
+  overflow-x: auto;
+}
+.jig-table {
+  border-collapse: collapse;
+}
+.jig-table th {
+  text-align: left;
+  font-weight: 400;
+  padding: 0 6px 4px;
+  white-space: nowrap;
+}
+.jig-table td {
+  padding: 4px 6px;
+  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  white-space: nowrap;
+}
+.jig-cell-length {
+  width: 150px;
+}
+.jig-cell-select {
+  min-width: 130px;
+}
+.jig-toggle :deep(.v-btn) {
+  min-width: 0;
+  padding: 0 10px;
 }
 /* A list field's row: its name, then its choices side by side, wrapping on a narrow screen. */
 .jig-row {

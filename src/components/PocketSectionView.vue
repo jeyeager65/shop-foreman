@@ -59,7 +59,8 @@ const screwTransform = computed(() => `translate(0 ${(t.value / 2).toFixed(2)}) 
       <rect x="0" y="0" :width="reach - 2" :height="t" class="board" />
       <!-- The pocket and the channel are slots down the middle: drawn lighter, the wood either side of them still there. -->
       <polygon :points="points(s.pocket)" class="slot" />
-      <polygon v-if="s.channel" :points="channel" class="slot" />
+      <!-- A channel only outlined: 4 mm across, the wood either side of it is what you see above the screw. -->
+      <polygon v-if="s.channel" :points="channel" class="channel" />
       <g :transform="screwTransform">
         <!-- A drilled pilot, from the edge to the seat. -->
         <template v-if="!s.channel">
@@ -104,6 +105,12 @@ const screwTransform = computed(() => `translate(0 ${(t.value / 2).toFixed(2)}) 
 }
 .other {
   fill: #a8875c;
+}
+.channel {
+  fill: none;
+  stroke: #2a2e37;
+  stroke-width: 0.35;
+  stroke-dasharray: 1.2 0.8;
 }
 .slot {
   fill: #5c4c38;
