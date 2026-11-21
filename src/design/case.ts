@@ -24,8 +24,8 @@ import { BACK_GROOVE_DEPTH, BACK_RABBET_DEPTH, CASE_DADO_DEPTH, CASE_SCREW_HOLE,
 import { POCKET_END_INSET, jointPositions, pocketPositions, pocketRow } from './pocketHoles';
 import { constructionRules, thicknessOf, kickBoardOf, toeKickOf } from './style';
 
-/** Front-to-back width of the two top stretchers. Tune me. */
-export const STRETCHER_WIDTH: Mm = 4 * MM_PER_INCH;
+import { SINK_STRETCHER_WIDTH, STRETCHER_WIDTH, topStretcherWidth } from './stretchers';
+export { SINK_STRETCHER_WIDTH, STRETCHER_WIDTH, topStretcherWidth };
 /** How tall a wall cabinet's hanging rails stand, top and bottom, against the back. Tune me. */
 export const HANGING_RAIL_WIDTH: Mm = 3.5 * MM_PER_INCH;
 /** The width of each half of a French cleat, and of the spacer strip under it. Tune me. */
@@ -33,6 +33,7 @@ export const CLEAT_WIDTH: Mm = 3 * MM_PER_INCH;
 /** The two short edges of a corner block under the top. Tune me. */
 export const TOP_CORNER_BLOCK: Mm = 4 * MM_PER_INCH;
 /** The width of a cross stretcher under the top. Tune me. */
+
 export const CROSS_STRETCHER_WIDTH: Mm = 3 * MM_PER_INCH;
 /** Whether a cabinet can have corner blocks and cross stretchers under its top: one with stretchers, an ordinary case. */
 export const takesTopSupport = (cabinet: Pick<CabinetDesign, 'form' | 'corner' | 'caseTop'>) => !hasTopPanel(cabinet) && cabinet.corner?.kind !== 'diagonal' && cabinet.corner?.kind !== 'lShaped';
@@ -245,7 +246,7 @@ export function deriveCaseParts(cabinet: CabinetDesign, materials: Material[], f
   /** A full top panel (a wall cabinet) in place of the two stretchers. */
   const topPanel = hasTopPanel(cabinet);
   const rails = hasHangingRails(cabinet);
-  if (!topPanel && depth <= 2 * STRETCHER_WIDTH) throw new Error('The cabinet is too shallow for its two stretchers.');
+  if (!topPanel && depth <= 2 * topStretcherWidth(cabinet)) throw new Error('The cabinet is too shallow for its two stretchers.');
   if (rails && ceiling - floorTop <= 2 * HANGING_RAIL_WIDTH) throw new Error('The cabinet is too short for its two hanging rails.');
   // In front of the sides (`toeKick.board`) the board's face is where the toe space ends, so the sides' notches are deeper by its thickness.
   const kickBoard = kickBoardOf(cabinet);
@@ -374,7 +375,9 @@ export function deriveCaseParts(cabinet: CabinetDesign, materials: Material[], f
   // (Over a power hub it lies flat whatever the project says: on edge it would stand in the opening the removable back leaves.)
   const nailer = cabinet.joinery.backStretcherForm === 'nailer' && hubBackSplit(cabinet, materials) === undefined;
   /** The back stretcher's section in a side: from..to behind the case front, under..H off the floor. */
-  const rear = nailer ? { from: depth - t, to: depth, under: H - STRETCHER_WIDTH } : { from: depth - STRETCHER_WIDTH, to: depth, under: ceiling };
+  // The top stretchers' depth, front to back where they lie flat: narrower over a sink, whose bowl hangs between them.
+  const SW = topStretcherWidth(cabinet);
+  const rear = nailer ? { from: depth - t, to: depth, under: H - STRETCHER_WIDTH } : { from: depth - SW, to: depth, under: ceiling };
   // The dados stop at the front of the back, so none runs into its rabbet or groove.
   // The rabbet or groove itself runs the full height of the side, down to the floor.
   // A wall cabinet's hanging rails stand on edge against the back, under the top and on the bottom: joined like a nailer.
@@ -411,7 +414,7 @@ export function deriveCaseParts(cabinet: CabinetDesign, materials: Material[], f
           ...railSpans.flatMap((r) => housing(side, joint.back, `dado-${r.key}`, depth - t, depth, r.under, r.under + HANGING_RAIL_WIDTH)),
         ]
       : [
-          ...housing(side, joint.front, 'dado-stretcher-front', band, STRETCHER_WIDTH, ceiling, H),
+          ...housing(side, joint.front, 'dado-stretcher-front', band, SW, ceiling, H),
           ...housing(side, joint.back, 'dado-stretcher-back', rear.from, rear.to, rear.under, H),
         ]),
     ...floorSpans.flatMap((s) => slotsFlat(side, s.which, s.key, s.front, s.length, floorTop)),
@@ -419,8 +422,8 @@ export function deriveCaseParts(cabinet: CabinetDesign, materials: Material[], f
     ...(topPanel
       ? [...slotsFlat(side, joint.bottom, 'top', band, depth - band, H), ...railSpans.flatMap((r) => slotsOnEdge(side, joint.back, r.key, depth - t, depth, r.under, HANGING_RAIL_WIDTH))]
       : [
-          ...slotsFlat(side, joint.front, 'stretcher-front', band, STRETCHER_WIDTH - band, H),
-          ...(nailer ? slotsOnEdge(side, joint.back, 'stretcher-back', rear.from, rear.to, rear.under, STRETCHER_WIDTH) : slotsFlat(side, joint.back, 'stretcher-back', rear.from, STRETCHER_WIDTH, H)),
+          ...slotsFlat(side, joint.front, 'stretcher-front', band, SW - band, H),
+          ...(nailer ? slotsOnEdge(side, joint.back, 'stretcher-back', rear.from, rear.to, rear.under, STRETCHER_WIDTH) : slotsFlat(side, joint.back, 'stretcher-back', rear.from, SW, H)),
         ]),
     ...backSpans.map((s, i) => slotAt(side, `back-${i + 1}`, depth, depth + tBack, floorUnder + s.from, floorUnder + s.to)),
     ...(backJoint === 'rabbet' ? [recess(side, 'rabbet-back', depth, depth + tBack, 0, H, BACK_RABBET_DEPTH)] : []),
@@ -433,12 +436,12 @@ export function deriveCaseParts(cabinet: CabinetDesign, materials: Material[], f
           ...railSpans.flatMap((r) => through(side, joint.back, r.key, jointPositions(0, HANGING_RAIL_WIDTH).map((p) => ({ behind: depth - t / 2, y: r.under + p })))),
         ]
       : [
-          ...through(side, joint.front, 'stretcher-front', alongFlat(band, STRETCHER_WIDTH - band, clearOfFrame, H)),
+          ...through(side, joint.front, 'stretcher-front', alongFlat(band, SW - band, clearOfFrame, H)),
           ...through(
             side,
             joint.back,
             'stretcher-back',
-            nailer ? jointPositions(0, STRETCHER_WIDTH).map((p) => ({ behind: rear.from + t / 2, y: rear.under + p })) : alongFlat(rear.from, STRETCHER_WIDTH, 0, H),
+            nailer ? jointPositions(0, STRETCHER_WIDTH).map((p) => ({ behind: rear.from + t / 2, y: rear.under + p })) : alongFlat(rear.from, SW, 0, H),
           ),
         ]),
   ];
@@ -525,7 +528,7 @@ export function deriveCaseParts(cabinet: CabinetDesign, materials: Material[], f
       add(r.key, r.name, 'stretcher', caseId, size, { origin: [t - reach, r.under, -(depth - t)], xAxis: RIGHT, yAxis: UP }, endsOutline(joint.back, size.width, size.height), undefined, sideScrews(joint.back, 'B', 0, HANGING_RAIL_WIDTH));
     }
   } else {
-  spanning('stretcher-front', 'Front stretcher', 'stretcher', joint.front, band, STRETCHER_WIDTH - band, H, 'A', true, 'y0');
+  spanning('stretcher-front', 'Front stretcher', 'stretcher', joint.front, band, SW - band, H, 'A', true, 'y0');
   if (nailer) {
     // On edge at the top back: face A is its front, and its screws go in from the rear
     // face, which the back covers.
@@ -533,7 +536,7 @@ export function deriveCaseParts(cabinet: CabinetDesign, materials: Material[], f
     const size = { width: inside + 2 * reach, height: STRETCHER_WIDTH, thickness: t };
     add('stretcher-back', 'Back stretcher', 'stretcher', caseId, size, { origin: [t - reach, rear.under, -rear.from], xAxis: RIGHT, yAxis: UP }, endsOutline(joint.back, size.width, size.height), undefined, sideScrews(joint.back, 'B', 0, STRETCHER_WIDTH));
   } else {
-    spanning('stretcher-back', 'Back stretcher', 'stretcher', joint.back, rear.from, STRETCHER_WIDTH, H, 'A', false);
+    spanning('stretcher-back', 'Back stretcher', 'stretcher', joint.back, rear.from, SW, H, 'A', false);
   }
   }
 
@@ -541,7 +544,7 @@ export function deriveCaseParts(cabinet: CabinetDesign, materials: Material[], f
   // the front stretcher's rear edge and the front of the back stretcher. Glued and screwed; their joints are not drawn.
   const support = takesTopSupport(cabinet) ? cabinet.topSupport : undefined;
   if (support) {
-    const [front, back] = [STRETCHER_WIDTH, rear.from];
+    const [front, back] = [SW, rear.from];
     const block = support.cornerBlocks ? Math.min(TOP_CORNER_BLOCK, inside / 2, (back - front) / 2) : 0;
     if (block > 0) {
       const size = { width: block, height: block, thickness: t };

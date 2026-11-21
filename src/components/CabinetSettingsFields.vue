@@ -11,7 +11,7 @@ import { backJointTile, caseJointTile } from '@/design/tileDrawings';
 import { computed, ref } from 'vue';
 import LengthField from '@/components/LengthField.vue';
 import MaterialSelect from '@/components/MaterialSelect.vue';
-import { BOTTOM_KINDS, type BottomKind, CASTER_UNDER_CHOICES, casterUnderChoice, setCasterUnderChoice, JOINED_PARTS, type JoinedPart, TAB_BACK_MIN, bottomKindOf, isCaster, isShelfPin, setBottomKind } from '@/design';
+import { SINK_STRETCHER_WIDTH, STRETCHER_WIDTH, BOTTOM_KINDS, type BottomKind, CASTER_UNDER_CHOICES, casterUnderChoice, setCasterUnderChoice, JOINED_PARTS, type JoinedPart, TAB_BACK_MIN, bottomKindOf, isCaster, isShelfPin, setBottomKind } from '@/design';
 import type { BackJoint, BackStretcherForm, CabinetSettings, CaseJoint, Length, WallHanging } from '@/model';
 import { useAppStore } from '@/stores/app';
 import { TAB, tabSizeOf } from '@/design/tabs';
@@ -134,6 +134,17 @@ function setJoint(part: JoinedPart, value: string) {
   else delete overrides[part];
   if (Object.keys(overrides).length) joinery.overrides = overrides;
   else delete joinery.overrides;
+}
+/** The top stretchers' depth, usual or over a sink: kept only where it differs from the default. */
+function setStretchers(key: 'width' | 'underSink', value: Length | null) {
+  if (!value || value.mm <= 0) return;
+  const joinery = s.value.joinery;
+  const start = key === 'width' ? STRETCHER_WIDTH : SINK_STRETCHER_WIDTH;
+  const next = { ...joinery.stretchers };
+  if (Math.abs(value.mm - start) < 0.01) delete next[key];
+  else next[key] = value;
+  if (Object.keys(next).length) joinery.stretchers = next;
+  else delete joinery.stretchers;
 }
 const ownJoints = ref(Object.keys(s.value.joinery.overrides ?? {}).length > 0);
 function setOwnJoints(on: boolean) {
@@ -288,6 +299,15 @@ function setKickJoint(value: string) {
       <div v-if="!thickBack" class="text-caption text-medium-emphasis mt-1">{{ s.joinery.back === 'tabs' ? 'This back is too thin for tabs: give it a material 1/2" thick or more.' : 'A back 1/2" thick or more can also be on tabs, in slots in the sides.' }}</div>
     </v-col>
     <v-col v-if="floor && joints !== 'only'" cols="12" :class="mark(marks, 'joinery.backStretcherForm')"><v-select v-model="s.joinery.backStretcherForm" label="Back stretcher form" :items="STRETCHER_FORMS" /></v-col>
+    <template v-if="floor && joints !== 'only'">
+      <v-col cols="6" :class="mark(marks, 'joinery.stretchers.width')">
+        <LengthField :model-value="s.joinery.stretchers?.width ?? { mm: STRETCHER_WIDTH, unit: 'in' }" label="Top stretchers, front to back" data-test="stretcher-width" @update:model-value="setStretchers('width', $event)" />
+      </v-col>
+      <v-col cols="6" :class="mark(marks, 'joinery.stretchers.underSink')">
+        <LengthField :model-value="s.joinery.stretchers?.underSink ?? { mm: SINK_STRETCHER_WIDTH, unit: 'in' }" label="Over a sink" data-test="stretcher-under-sink" @update:model-value="setStretchers('underSink', $event)" />
+      </v-col>
+      <v-col cols="12" class="text-caption text-medium-emphasis pt-0">Where they lie flat. Over a sink they are narrower, the sink's bowl hanging between them.</v-col>
+    </template>
     <v-col v-if="walls && joints !== 'only'" cols="12" :class="mark(marks, 'hanging')"><v-select v-model="s.hanging" label="Wall cabinets hang on" :items="HANGINGS" data-test="hanging" /></v-col>
   </v-row>
 </template>

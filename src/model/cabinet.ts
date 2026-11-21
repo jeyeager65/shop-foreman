@@ -873,6 +873,11 @@ export interface CabinetJoinery {
   back: BackJoint;
   /** Whether the back stretcher lies flat like the front one or stands on edge against the back. */
   backStretcherForm: BackStretcherForm;
+  /**
+   * How deep the top stretchers are, front to back, where they lie flat: `width` on a cabinet, `underSink` on one with
+   * a sink whose bowl hangs between them. Left out: 4" and 2-1/2" (`STRETCHER_WIDTH`, `SINK_STRETCHER_WIDTH`).
+   */
+  stretchers?: { width?: Length; underSink?: Length };
 }
 
 /**

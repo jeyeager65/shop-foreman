@@ -172,7 +172,8 @@ describe('a sink with its faucet holes in the top', () => {
     const project = withSink({ mount: 'undermount', faucet: { holes: 3 } });
     const stored = (project.context as CasesContext).pieces[0]!;
     stored.size.depth = len('21"');
-    stored.sink = { ...stored.sink!, width: len('19"'), depth: len('16"'), shape: 'oval' };
+    // (15" front to back: a 16" one cannot both clear the front stretcher and leave the inch behind its holes.)
+    stored.sink = { ...stored.sink!, width: len('19"'), depth: len('15"'), shape: 'oval' };
     expect(problems(project).some((w) => /faucet holes/.test(w))).toBe(false);
     const c = cut(project)!;
     expect(Math.min(...c.holes.flat().map((p) => p[1])) - c.piece.zBack).toBeGreaterThanOrEqual(len('1"').mm - 0.5);

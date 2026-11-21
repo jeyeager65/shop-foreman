@@ -10,7 +10,8 @@
  */
 import type { BoughtTop, CabinetDesign, CabinetSink, DesignedCabinetContext, Hardware, LeafEdge, Material, Mm, OwnTop, TopLeaf, Part, Point, Project, Run, TopDesign, TopSettings, TorsionSettings, TorsionTable, Vec3 } from '@/model';
 import { applianceFootprint, appliancePlace, applianceShapeId, appliancesOf, underCounter } from './appliances';
-import { SINK, apronOf, farmhouseRow, faucetHoles, integratedBowl, roundedOutline, sinkCentre, sinkLook, sinkOpenings } from './sinks';
+import { hasTopPanel } from './case';
+import { SINK, apronOf, farmhouseRow, faucetHoles, integratedBowl, sinkBowlBlock, stretcherRoom, roundedOutline, sinkCentre, sinkLook, sinkOpenings } from './sinks';
 import { LEAF, deriveTorsionParts, leafHardwareShapes, lightTopTable, torsionRibProblem, torsionThickness } from './torsion';
 import { DROP_LEAF, dropLeafShapes } from './dropLeaf';
 import { pocketRow } from './pocketHoles';
@@ -896,6 +897,12 @@ export function sinkProblems(project: Project, cabinet: CabinetDesign, materials
     const material = materials.find((m) => m.id === cut.piece.settings.materialId);
     if (kind === 'bought') out.push("An undermount sink leaves the top's cut edge showing, and a laminate top's core swells when it gets wet: drop it in instead, or use a stone or solid wood top.");
     else if ((kind === 'made' || kind === 'torsion') && material?.groupId !== 'solid-wood') out.push(`An undermount sink leaves the top's cut edge showing: ${material?.name.toLowerCase() ?? 'this material'}'s edge cannot be left open where it gets wet. Drop it in instead, or use a stone or solid wood top.`);
+  }
+  // Its bowl hangs between the top stretchers: one too deep for the room between them runs into one.
+  const room = stretcherRoom(cabinet);
+  const bowlBlock = sinkBowlBlock(cabinet);
+  if (room && bowlBlock && sink.mount !== 'farmhouse' && !hasTopPanel(cabinet) && (bowlBlock.max[2] > room.front + 0.5 || bowlBlock.min[2] < room.back - 0.5)) {
+    out.push(`The sink's bowl, ${length(bowlBlock.max[2] - bowlBlock.min[2])} front to back, does not fit between the top stretchers (${length(room.front - room.back)} between them): choose a shallower sink, or narrower stretchers (Construction).`);
   }
   // A farmhouse sink stands in the top row over the doors, its apron that row's front.
   if (sink.mount === 'farmhouse' && !farmhouseRow(cabinet)) out.push('A farmhouse sink stands in the top row, its apron in place of that row\'s front: give the cabinet a drawer row over its doors (Openings), whole across.');

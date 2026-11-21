@@ -7,6 +7,7 @@
  */
 import type { CabinetDesign, CabinetSink, Mm, SinkLook, SinkMount } from '@/model';
 import { MM_PER_INCH, len } from '@/units';
+import { topStretcherWidth } from './stretchers';
 
 const IN = MM_PER_INCH;
 
@@ -178,14 +179,42 @@ export function faucetWords(sink: Pick<CabinetSink, 'faucet' | 'depth'>, length:
  * frame; left out, a guess at it), or further forward where its faucet's holes need the room behind it, an inch of
  * top behind them.
  */
-export function sinkCentre(cabinet: Pick<CabinetDesign, 'size' | 'sink'>, front: Mm = SINK.frontGuess): [Mm, Mm] {
+export function sinkCentre(cabinet: SinkCabinet, front: Mm = SINK.frontGuess): [Mm, Mm] {
   const sink = cabinet.sink;
   // A farmhouse sink stands with its apron in front: `front` is then where its apron's face is.
   if (sink?.mount === 'farmhouse') return [cabinet.size.width.mm / 2 + (sink.offset?.mm ?? 0), front - sink.depth.mm / 2];
   const centred = (front - cabinet.size.depth.mm) / 2;
   const behind = sink && holesInTop(sink) ? (sink.mount === 'vessel' ? 2 * IN : SINK.faucetBehind) + SINK.faucetHole / 2 + IN : 0;
   const least = sink ? -cabinet.size.depth.mm + behind + sink.depth.mm / 2 : centred;
-  return [cabinet.size.width.mm / 2 + (sink?.offset?.mm ?? 0), Math.max(centred, least)];
+  const z = Math.max(centred, least);
+  // Its bowl hangs between the top stretchers: moved back off the front one, or forward off the back one.
+  const bowl = sink && (sink.mount === 'dropIn' || sink.mount === 'undermount') ? { front: sink.depth.mm / 2 - (sink.mount === 'dropIn' ? SINK_DRAWN.lip : SINK.flange), back: sink.depth.mm / 2 - (sink.mount === 'dropIn' ? SINK_DRAWN.deck : SINK.flange) } : undefined;
+  return [cabinet.size.width.mm / 2 + (sink?.offset?.mm ?? 0), bowl ? betweenStretchers(cabinet, z, bowl.front, bowl.back) : z];
+}
+
+/** What a sink's place is worked out from: the cabinet's size and sink, and (for its stretchers) its form and joinery. */
+export type SinkCabinet = Pick<CabinetDesign, 'size' | 'sink'> & Partial<Pick<CabinetDesign, 'form' | 'joinery'>>;
+
+/** How far a sink's bowl stays clear of the top stretchers. Tune me. */
+export const STRETCHER_CLEAR: Mm = 0.25 * IN;
+
+/**
+ * The room for a bowl between a cabinet's top stretchers, front to back in its frame: from behind the front stretcher
+ * to in front of the back one (flat, or on edge against the back). None where the case has no stretchers known.
+ */
+export function stretcherRoom(cabinet: SinkCabinet): { front: Mm; back: Mm } | undefined {
+  if (!cabinet.joinery || !cabinet.form) return undefined;
+  const width = topStretcherWidth({ sink: cabinet.sink, form: cabinet.form, joinery: cabinet.joinery });
+  const back = cabinet.joinery.backStretcherForm === 'nailer' ? 0.75 * IN : width;
+  return { front: -width - STRETCHER_CLEAR, back: -cabinet.size.depth.mm + back + STRETCHER_CLEAR };
+}
+
+/** A bowl's centre `z` moved, where it must, to hang between the stretchers: `front` and `back` its edges' distances from it. */
+function betweenStretchers(cabinet: SinkCabinet, z: Mm, front: Mm, back: Mm): Mm {
+  const room = stretcherRoom(cabinet);
+  if (!room) return z;
+  // Off the front one first; then off the back one, which wins where the bowl is too deep for both (`sinkProblems` says so).
+  return Math.max(Math.min(z, room.front - front), room.back + back);
 }
 
 /**
@@ -193,7 +222,7 @@ export function sinkCentre(cabinet: Pick<CabinetDesign, 'size' | 'sink'>, front:
  * and as deep as the bowl's outside. Nothing for a vessel or a cabinet with no sink. For what is cut round it inside
  * (`obstacleBlocks`); the top's thickness is a guess.
  */
-export function sinkBowlBlock(cabinet: Pick<CabinetDesign, 'size' | 'sink'>): { min: [Mm, Mm, Mm]; max: [Mm, Mm, Mm] } | undefined {
+export function sinkBowlBlock(cabinet: SinkCabinet): { min: [Mm, Mm, Mm]; max: [Mm, Mm, Mm] } | undefined {
   const sink = cabinet.sink;
   if (!sink || sink.mount === 'vessel') return undefined;
   // A top with its sink in it: its bowl, from the top's surface down.
@@ -203,25 +232,30 @@ export function sinkBowlBlock(cabinet: Pick<CabinetDesign, 'size' | 'sink'>): { 
     return { min: [b.cx - b.width / 2, surface - sink.bowlDepth.mm, b.cz - b.depth / 2], max: [b.cx + b.width / 2, cabinet.size.height.mm, Math.min(0, b.cz + b.depth / 2)] };
   }
   const [cx, cz] = sinkCentre(cabinet);
-  const inset = sink.mount === 'dropIn' ? sinkInset({ mount: 'dropIn' }) : 0;
-  const [w, d] = [sink.width.mm - 2 * inset, sink.depth.mm - 2 * inset];
+  // A drop-in's bowl is inside its lip at the sides and the front, its deck behind; an undermount's inside its flange.
+  const dropIn = sink.mount === 'dropIn';
+  const side = dropIn ? SINK_DRAWN.lip : sink.mount === 'undermount' ? SINK.flange : 0;
+  const [front, back] = dropIn ? [SINK_DRAWN.lip, SINK_DRAWN.deck] : [side, side];
+  const w = sink.width.mm - 2 * side;
   // A drop-in's rim lies on the top; an undermount hangs under it; a farmhouse sink stands on its platform, its body
   // from there up.
-  const rimAt = cabinet.size.height.mm + (sink.mount === 'dropIn' ? SINK.topGuess : 0);
+  const rimAt = cabinet.size.height.mm + (dropIn ? SINK.topGuess : 0);
   const bottom = sink.mount === 'farmhouse' ? farmhouseFloor(cabinet) : rimAt - sink.bowlDepth.mm;
-  return { min: [cx - w / 2, bottom, cz - d / 2], max: [cx + w / 2, cabinet.size.height.mm, Math.min(0, cz + d / 2)] };
+  return { min: [cx - w / 2, bottom, cz - sink.depth.mm / 2 + back], max: [cx + w / 2, cabinet.size.height.mm, Math.min(0, cz + sink.depth.mm / 2 - front)] };
 }
 
 /**
  * The bowl of a bought top with its sink in it, in its cabinet's frame: its centre and size. The top's back is the
  * cabinet's; the bowl is a share of the top's width and depth, a little forward of its middle (tune me).
  */
-export function integratedBowl(cabinet: Pick<CabinetDesign, 'size' | 'sink'>): { cx: Mm; cz: Mm; width: Mm; depth: Mm } | undefined {
+export function integratedBowl(cabinet: SinkCabinet): { cx: Mm; cz: Mm; width: Mm; depth: Mm } | undefined {
   const sink = cabinet.sink;
   if (!sink || sink.mount !== 'integrated') return undefined;
   const [cx] = sinkCentre(cabinet);
   const zBack = -cabinet.size.depth.mm;
-  return { cx, cz: zBack + sink.depth.mm / 2 + sink.depth.mm * 0.05, width: sink.width.mm * SINK.integratedBowl.width, depth: sink.depth.mm * SINK.integratedBowl.depth };
+  const depth = sink.depth.mm * SINK.integratedBowl.depth;
+  const cz = betweenStretchers(cabinet, zBack + sink.depth.mm / 2 + sink.depth.mm * 0.05, depth / 2, depth / 2);
+  return { cx, cz, width: sink.width.mm * SINK.integratedBowl.width, depth };
 }
 
 /** Tune me: how a sink is drawn. A drop-in's rim round its bowls, and the deck behind them its faucet stands on. */
