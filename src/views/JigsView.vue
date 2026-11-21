@@ -209,6 +209,30 @@ const gcode = computed<{ files: JigFile[]; error?: string }>(() => {
 const notes = computed(() => (item.value?.notes && !problems.value.length ? item.value.notes(values.value) : []));
 /** A test cut in scrap has no solid: its picture is its own G-code, carved out of the scrap. */
 const carved = computed(() => (item.value?.carved ? gcode.value.files[0]?.text : undefined));
+/** Or, where it has one, the scrap once its pilots are drilled by hand, cut away through each pocket: built when shown. */
+const scrapView = ref<'cut' | 'drilled'>('cut');
+const drilledSolids = shallowRef<PrintObject[]>([]);
+const drilledError = ref('');
+let drilledRun = 0;
+watch(
+  [item, values, scrapView],
+  async () => {
+    const i = item.value;
+    if (!i?.drilled || scrapView.value !== 'drilled' || problems.value.length) return void (drilledSolids.value = []);
+    const run = ++drilledRun;
+    try {
+      const objects = await i.drilled(JSON.parse(JSON.stringify(values.value)) as JigValues, wasmUrl);
+      if (run !== drilledRun) return;
+      drilledSolids.value = objects;
+      drilledError.value = '';
+    } catch (e) {
+      if (run !== drilledRun) return;
+      drilledSolids.value = [];
+      drilledError.value = e instanceof Error ? e.message : String(e);
+    }
+  },
+  { immediate: true, deep: true },
+);
 const downloadFile = (f: JigFile) => download(f.name, f.text ?? f.bytes ?? '', f.text ? 'text/plain' : 'model/3mf');
 
 /** A handle is a library entry: its sizes go back to the shop profile, for every project that uses it. */
@@ -381,16 +405,25 @@ const madeWords = (i: JigItem) => (i.made === 'print' ? '3D print' : 'Cut on the
       </v-col>
       <v-col cols="12" :md="hasTable ? 5 : 7" :lg="hasTable ? 6 : 7" :xl="hasTable ? 7 : 7">
         <v-card class="pa-5 mb-4">
-          <PanelTitle icon="view">Picture</PanelTitle>
+          <PanelTitle icon="view">{{ item.carved ? 'The scrap' : '3D view' }}</PanelTitle>
           <MeshView v-if="solids.length" :objects="solids" />
           <template v-else-if="carved">
-            <StockCarveView :gcode="carved" data-test="jig-carved" />
+            <v-btn-toggle v-if="item.drilled" v-model="scrapView" mandatory density="compact" variant="outlined" divided class="mb-3" data-test="jig-scrap-view">
+              <v-btn value="cut" size="small">As cut</v-btn>
+              <v-btn value="drilled" size="small">As drilled</v-btn>
+            </v-btn-toggle>
+            <template v-if="scrapView === 'drilled' && item.drilled">
+              <MeshView v-if="drilledSolids.length" :objects="drilledSolids" data-test="jig-drilled" />
+              <div v-else class="text-body-2 text-medium-emphasis">{{ drilledError || 'Building…' }}</div>
+            </template>
+            <StockCarveView v-else :gcode="carved" data-test="jig-carved" />
             <!-- The pockets in section, through each screw: what the angle and the seat do. -->
             <div v-if="sections.length" class="sections mt-3" data-test="jig-sections">
               <PocketSectionView v-for="sec in sections" :key="sec.title" :title="sec.title" :section="sec.section" />
             </div>
             <div class="text-caption text-medium-emphasis mt-2">
-              The scrap as the file cuts it: the G-code below, carved with its bit. Drag to turn, scroll to zoom; the slider steps through the cut.
+              <template v-if="scrapView === 'drilled' && item.drilled">The scrap seen through, with the pilots drilled from the edge with the guide in blue (a slot is cut by the CNC instead, and has none). Drawn from the pockets' sizes. Drag to turn, scroll to zoom.</template>
+              <template v-else>The scrap as the file cuts it: the G-code below, carved with its bit. Drag to turn, scroll to zoom; the slider steps through the cut.</template>
             </div>
           </template>
           <div v-else class="text-body-2 text-medium-emphasis" data-test="jig-no-picture">

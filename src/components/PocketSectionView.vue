@@ -4,7 +4,7 @@
  * lying in it with its head on the seat, and its pilot (drilled) or channel (cut open). Drawn to scale in mm, the
  * face the pocket is cut in at the top. Under it: the seat's distance and how much screw goes into the other part.
  */
-import { computed } from 'vue';
+import { computed, useId } from 'vue';
 import type { PocketSection } from '@/jigs/pocketSection';
 import { POCKET_SCREW, bothUnits } from '@/jigs/pocketSection';
 import { POCKET } from '@/geometry/pocketHole';
@@ -25,14 +25,48 @@ const kind = computed(() => POCKET_SCREW[s.value.screwKind]);
 /** Along the screw from where it leaves the edge: its tip, where its threads stop, and its seat. */
 const tip = computed(() => s.value.seat - s.value.screw);
 const threadEnd = computed(() => tip.value + s.value.screw * kind.value.threads);
-/** The threads, seen from the side: a zigzag between their outsides, from behind the point to where they stop. */
-const threads = computed(() => {
-  const [from, to, half, pitch] = [tip.value + POCKET_SCREW.point, threadEnd.value, kind.value.thread / 2, s.value.fine ? POCKET_SCREW.pitch.fine : POCKET_SCREW.pitch.coarse];
-  const n = Math.max(1, Math.round((to - from) / pitch));
-  return Array.from({ length: n + 1 }, (_, i) => `${(from + ((to - from) * i) / n).toFixed(2)},${(i % 2 ? half : -half).toFixed(2)}`).join(' ');
+/**
+ * The screw's body seen from the side, along its axis from the tip (x) and across it (y), as one outline: the point,
+ * tapering to the tip with its threads running down it; the threaded length, a sawtooth on each edge (each crest leaning
+ * toward the head, the two edges half a pitch apart as a helix shows them); then the smooth shank up to the seat.
+ */
+const body = computed(() => {
+  const k = kind.value;
+  const [x0, xThreads, xSeat] = [tip.value, threadEnd.value, s.value.seat];
+  const pitch = s.value.fine ? POCKET_SCREW.pitch.fine : POCKET_SCREW.pitch.coarse;
+  const [root, crest] = [k.shank / 2 * 0.82, k.thread / 2];
+  /** The radius a crest or root reaches at x: full along the thread, tapering to nothing at the tip over the point. */
+  const taper = (x: number) => Math.min(1, Math.max(0, (x - x0) / POCKET_SCREW.point));
+  const edge = (side: 1 | -1) => {
+    const pts: [number, number][] = [];
+    const offset = side === 1 ? 0 : pitch / 2;
+    for (let x = x0 + offset; x < xThreads; x += pitch) {
+      pts.push([x, side * root * taper(x)]);
+      const peak = Math.min(xThreads, x + pitch * 0.62);
+      pts.push([peak, side * crest * taper(peak)]);
+    }
+    pts.push([xThreads, side * root], [xThreads + 0.6, side * (k.shank / 2)], [xSeat, side * (k.shank / 2)]);
+    return pts;
+  };
+  const top = edge(-1);
+  const bottom = edge(1).reverse();
+  return [[x0, 0] as [number, number], ...top, ...bottom].map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' ');
 });
-/** The point: from the threads' root down to the tip. */
-const point = computed(() => `${tip.value.toFixed(2)},0 ${(tip.value + POCKET_SCREW.point).toFixed(2)},${(-kind.value.shank / 2).toFixed(2)} ${(tip.value + POCKET_SCREW.point).toFixed(2)},${(kind.value.shank / 2).toFixed(2)}`);
+/** The head, on the seat: a Castle screw's short cheese head, or a Kreg screw's washer head, flat underneath and domed. */
+const head = computed(() => {
+  const { diameter: d, height: h } = kind.value.head;
+  const x = s.value.seat;
+  if (s.value.screwKind === 'castle') return `M ${x} ${-d / 2} L ${x + h - 0.8} ${-d / 2} Q ${x + h} ${-d / 2} ${x + h} ${-d / 2 + 0.8} L ${x + h} ${d / 2 - 0.8} Q ${x + h} ${d / 2} ${x + h - 0.8} ${d / 2} L ${x} ${d / 2} Z`;
+  return `M ${x} ${-d / 2} L ${x + h * 0.3} ${-d / 2} Q ${x + h} ${-d / 4} ${x + h} 0 Q ${x + h} ${d / 4} ${x + h * 0.3} ${d / 2} L ${x} ${d / 2} Z`;
+});
+/** The drive's recess in the head's top, seen from the side: a notch. */
+const recess = computed(() => {
+  const { height: h } = kind.value.head;
+  const x = s.value.seat + h;
+  return `${(x - h * 0.55).toFixed(2)},-1.4 ${x.toFixed(2)},-1.6 ${x.toFixed(2)},1.6 ${(x - h * 0.55).toFixed(2)},1.4`;
+});
+/** The metal's shading across the screw, an id of this drawing's own since several are on a page. */
+const gradient = `screw-shade-${useId()}`;
 const t = computed(() => s.value.thickness);
 /** The view in SVG units (mm, y down): from inside the other part to past the pocket, above the face to under the board. */
 const view = computed(() => {
@@ -54,6 +88,23 @@ const screwTransform = computed(() => `translate(0 ${(t.value / 2).toFixed(2)}) 
 <template>
   <figure class="section">
     <svg :viewBox="`${view.x0} ${view.y0} ${view.w} ${view.h}`" class="drawing" role="img" :aria-label="`${title}: a section through the pocket and its screw`">
+      <defs>
+        <!-- Lit from above: a Kreg screw's zinc, a Castle screw's bronze coating. -->
+        <linearGradient :id="gradient" x1="0" y1="0" x2="0" y2="1">
+          <template v-if="s.screwKind === 'castle'">
+            <stop offset="0" stop-color="#5a4a30" />
+            <stop offset="0.3" stop-color="#d8c49a" />
+            <stop offset="0.5" stop-color="#b09870" />
+            <stop offset="1" stop-color="#5a4a30" />
+          </template>
+          <template v-else>
+            <stop offset="0" stop-color="#4b5563" />
+            <stop offset="0.3" stop-color="#f1f5f9" />
+            <stop offset="0.5" stop-color="#cbd2db" />
+            <stop offset="1" stop-color="#4b5563" />
+          </template>
+        </linearGradient>
+      </defs>
       <!-- The other part, standing against the edge, and the board the pocket is cut in. -->
       <rect :x="-t" :y="-8" :width="t" :height="t + 16" class="other" />
       <rect x="0" y="0" :width="reach - 2" :height="t" class="board" />
@@ -68,13 +119,10 @@ const screwTransform = computed(() => `translate(0 ${(t.value / 2).toFixed(2)}) 
           <line x1="0" :y1="POCKET.drill / 2" :x2="s.seat" :y2="POCKET.drill / 2" class="pilot" />
         </template>
         <!-- The screw: its point, its threaded length, its smooth shank up to the seat, and its head on the seat. -->
-        <g :class="{ bad: s.short || s.through }">
-          <polygon :points="point" class="screw" />
-          <rect :x="tip + POCKET_SCREW.point" :y="-kind.shank / 2" :width="s.screw - POCKET_SCREW.point" :height="kind.shank" class="screw" />
-          <polyline :points="threads" class="thread" />
-          <rect v-if="s.screwKind === 'castle'" :x="s.seat" :y="-kind.head.diameter / 2" :width="kind.head.height" :height="kind.head.diameter" rx="0.8" class="screw" />
-          <!-- A washer head: flat on the seat, rounded over its top. -->
-          <path v-else :d="`M ${s.seat} ${-kind.head.diameter / 2} L ${s.seat + kind.head.height * 0.4} ${-kind.head.diameter / 2} Q ${s.seat + kind.head.height} 0 ${s.seat + kind.head.height * 0.4} ${kind.head.diameter / 2} L ${s.seat} ${kind.head.diameter / 2} Z`" class="screw" />
+        <g :class="['screw', s.screwKind, { bad: s.short || s.through }]">
+          <polygon :points="body" :fill="`url(#${gradient})`" class="outline" />
+          <path :d="head" :fill="`url(#${gradient})`" class="outline" />
+          <polygon :points="recess" class="recess" />
         </g>
       </g>
       <!-- The joint's line. -->
@@ -123,17 +171,17 @@ const screwTransform = computed(() => `translate(0 ${(t.value / 2).toFixed(2)}) 
   stroke-width: 0.25;
   stroke-dasharray: 1 0.8;
 }
-.screw {
-  fill: #b8bec8;
-  stroke: #5b616b;
-  stroke-width: 0.2;
+.outline {
+  stroke: #2b2f36;
+  stroke-width: 0.18;
+  stroke-linejoin: round;
 }
-.bad .screw {
-  fill: #e0a050;
+.recess {
+  fill: #1c1f25;
 }
-.thread {
-  fill: none;
-  stroke: #5b616b;
+/* A screw too short or coming through: tinted amber over its shading. */
+.bad .outline {
+  stroke: #e0a050;
   stroke-width: 0.35;
 }
 .joint {

@@ -19,6 +19,7 @@ import { type DowelJig, type HingeCupJig, type PullTemplate, type ShelfPinJig, b
 import { buildInstallKitObjects } from './installKit';
 import { type PocketCover, buildPocketCover, coverSize, pocketCoverProblems } from './pocketCover';
 import { POCKET_SCREW, type PocketSection, bothUnits, farthestSeat, pocketSection } from './pocketSection';
+import { buildDrilledScrap, testLedge } from './drilledScrap';
 import { type PocketGuide, buildPocketGuide, guideBitOut, guideStockName, pocketGuideProblems } from './pocketGuide';
 import { buildPrintedHandle } from './printedHandles';
 import { buildSlideJigObjects, slideJigProblems } from './slideJig';
@@ -94,6 +95,8 @@ export interface JigItem {
   fileName: string;
   /** A thing with no solid of its own (a test cut in scrap): the page's picture is its G-code, carved. */
   carved?: boolean;
+  /** A test cut's second picture: the scrap once what is drilled by hand is drilled, cut away to show it. */
+  drilled?(values: JigValues, wasmUrl?: string): Promise<PrintObject[]>;
   /** More to say about it for these values, under its sizes: what the numbers come to. */
   notes?(values: JigValues): string[];
   /** What is kept under the page's "How this works": explanations that need not be in sight. */
@@ -265,8 +268,8 @@ export function jigItems(shop: ShopProfile): JigItem[] {
       key: 'angle',
       label: 'Angle',
       choices: [],
+      // Shown whatever the bit, a ball nose's one angle too: a table without it leaves the angle to be guessed.
       choicesFor: (values) => anglesFor(values).map((a) => ({ title: `${a}°`, value: String(a) })),
-      when: (_row, values) => anglesFor(values).length > 1,
     },
     // Typed, as in Setup and on Plan, with its unit switch: from the edge along the screw.
     { key: 'seat', label: 'Seat', length: true, reset: LOW_POCKET.seat, choices: [], when: lowRow },
@@ -289,7 +292,8 @@ export function jigItems(shop: ShopProfile): JigItem[] {
         { title: 'A slot cut open from the face, nothing drilled', short: 'Slot', value: 'channel' },
       ],
     },
-  ];  const testFields: JigField[] = [
+  ];
+  const testFields: JigField[] = [
     { key: 'materialId', label: 'Scrap of', kind: 'choice', choices: ballNoseStock },
     { key: 'bit', label: 'Cut with', kind: 'choice', choices: bitChoices, hint: 'One bit a scrap.' },
     // A ball nose cannot cut a flat ledge: on its scrap, the end mill that cuts the ledges.
@@ -474,6 +478,27 @@ export function jigItems(shop: ShopProfile): JigItem[] {
       // No solid of its own: the page carves its G-code out of the scrap.
       build: async () => [],
       carved: true,
+      // Each pocket where the file puts it, drawn from its section, with its pilot drilled or its channel cut.
+      drilled: async (values, wasmUrl) => {
+        const kinds = testKinds(values);
+        const tool = scrapBits.find((t) => t.id === values.bit);
+        const width = tool ? cutDiameter(tool) : lowBitWidth;
+        const t = scrapThickness(values);
+        const hardwood = shop.materialCatalog.find((m) => m.id === values.materialId)?.groupId === 'solid-wood';
+        const test = buildPocketTest(shopFor({ materials: shop.materialCatalog }, shop), String(values.materialId), kinds, String(values.bit));
+        const ledgeTool = shop.tools.find((x) => x.id === values.ledgeBit);
+        return buildDrilledScrap(
+          test.stock,
+          t,
+          test.pockets.map((p, i) => {
+            const k = kinds[i]!;
+            const section = pocketSection(t, k.bit === 'arc' ? (k.angleDeg ?? 3) : POCKET.angleDeg, k.seat, width, !!k.channel, hardwood);
+            const ledgeWidth = k.bit === 'ball' && ledgeTool ? cutDiameter(ledgeTool) : width;
+            return { x: p.x, section, ...(k.ledge ? { ledge: testLedge(section, ledgeWidth, k.seat) } : {}) };
+          }),
+          wasmUrl,
+        );
+      },
       // In sight: how long it takes, and only what needs doing (another bit, a guide to print).
       notes: (values) => {
         const kinds = testKinds(values);

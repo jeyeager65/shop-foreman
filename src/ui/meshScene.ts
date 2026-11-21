@@ -28,8 +28,16 @@ export function buildMeshScene(objects: PrintObject[]): { scene: THREE.Scene; si
     flat.computeVertexNormals();
     geometry.dispose();
     made.push(flat);
+    // A look of its own: a colour, and see-through (drawn after the solid ones, hiding nothing behind it).
+    let own = material;
+    if (object.look) {
+      const opacity = object.look.opacity ?? 1;
+      own = new THREE.MeshStandardMaterial({ color: object.look.color, roughness: 0.6, metalness: 0, transparent: opacity < 1, opacity, depthWrite: opacity >= 1 });
+      made.push(own);
+    }
     for (const p of object.placements) {
-      const mesh = new THREE.Mesh(flat, material);
+      const mesh = new THREE.Mesh(flat, own);
+      if (own.transparent) mesh.renderOrder = 1;
       mesh.position.set(p.x, p.y, 0);
       group.add(mesh);
     }

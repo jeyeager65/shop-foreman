@@ -134,15 +134,18 @@ function setUnit(next: 'in' | 'mm') {
       <!-- Back to the usual value, where it differs. -->
       <v-btn
         v-if="resetMm !== undefined && modelValue && Math.abs(modelValue.mm - resetMm) > 0.01"
-        :icon="mdiRestore"
+        icon
         variant="text"
-        size="x-small"
-        density="comfortable"
+        :width="22"
+        :height="22"
+        class="reset"
         :title="resetTitle"
         aria-label="Back to the usual value"
         data-test="length-reset"
         @click.stop="emit('update:modelValue', { mm: resetMm, unit })"
-      />
+      >
+        <v-icon :icon="mdiRestore" size="16" />
+      </v-btn>
       <!-- One small button: it says the unit shown, and a click shows (and keeps) the other. -->
       <UnitButton :unit="unit" :title="`Shown in ${unit === 'in' ? 'inches' : 'mm'}. Click for ${other === 'in' ? 'inches' : 'mm'}: converts the value.`" :aria-label="`Unit: ${unit}. Change to ${other}`" data-test="unit" @click.stop="setUnit(other)" />
     </template>
@@ -161,6 +164,17 @@ function setUnit(next: 'in' | 'mm') {
 }
 .length-field :deep(.v-field__append-inner) {
   padding-inline-start: 2px;
+  align-items: center;
+  padding-top: 0;
+}
+/* The reset: a small, quiet icon with a gap before the unit, brighter under the pointer. */
+.reset {
+  margin-inline-end: 4px;
+  opacity: 0.6;
+}
+.reset:hover,
+.reset:focus-visible {
+  opacity: 1;
 }
 .plain-length {
   display: inline-flex;

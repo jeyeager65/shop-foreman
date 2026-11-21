@@ -8,6 +8,8 @@ export interface PrintObject {
   mesh: SolidMesh;
   /** Where each copy sits on the print bed (the mesh's own origin moved to x, y). */
   placements: { x: Mm; y: Mm }[];
+  /** How it is drawn on the page, when not as a printed solid: its colour, and see-through below 1. Not written to the file. */
+  look?: { color: number; opacity?: number };
 }
 
 const n = (value: number) => String(Number(value.toFixed(4)));
