@@ -73,6 +73,8 @@ export interface JigItem {
   about: string;
   /** Not yet printed, cut or used: every size is a first guess. */
   untested?: boolean;
+  /** Always one: its file is one of it whatever, so the page asks no "How many" (the scrap test). */
+  single?: boolean;
   fields: JigField[];
   /** What the fields start at: the shop profile's entry where there is one, else the job's usual values. */
   defaults: JigValues;
@@ -418,6 +420,7 @@ export function jigItems(shop: ShopProfile): JigItem[] {
       made: 'cnc',
       about: `Pockets along the front edge of a piece of scrap ${POCKET_TEST.stock.y} mm deep (${testSize().x} mm long for two, ${POCKET_TEST.spacing} mm more for each more), cut with one bit, to screw to another piece: as many as you want to try, each its own kind, up to ${POCKET_TEST.most}. At 15° (as a job cuts them), or low angle as a routed pocket-hole machine cuts them, the screw at 3° or 6° and the seat where you set it; each with a ledge for a printed cover or without, its pilot drilled with the guide or its screw's way cut open from the face.`,
       untested: true,
+      single: true,
       fields: testFields,
       defaults: { materialId: testStock?.id ?? '', bit: scrapBits[0]?.id ?? '', pockets: TEST_START },
       problems: (values) => [

@@ -280,7 +280,7 @@ const madeWords = (i: JigItem) => (i.made === 'print' ? '3D print' : 'Cut on the
               />
               <v-text-field v-else :model-value="values[f.key]" :label="f.label" type="number" min="1" :data-test="`jig-field-${f.key}`" @update:model-value="set(f.key, Math.max(1, Math.floor(Number($event)) || 1))" />
             </v-col>
-            <v-col cols="12" sm="6">
+            <v-col v-if="!item.single" cols="12" sm="6">
               <v-text-field v-model.number="quantity" label="How many" type="number" min="1" max="200" hide-details data-test="jig-quantity" />
             </v-col>
           </v-row>
