@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { SINK, cabinetsOf, sinkCuts, sinkOfKind, sinkProblems, sinkShapes, starterTopSettings, topPieces } from '@/design';
+import { SINK, cabinetsOf, sinkCuts, sinkLook, sinkOfKind, sinkProblems, sinkShapes, starterTopSettings, topPieces } from '@/design';
 import { buildChecklistSections } from '@/job/checklist';
 import { buildJob } from '@/job/buildJob';
 import { buildLists } from '@/job/lists';
@@ -110,5 +110,26 @@ describe('a drop-in sink', () => {
     expect(cut(project)!.outlines).toHaveLength(1);
     const lists = buildLists(buildJob(project, shop), project, shop, words);
     expect(lists.buying.some((b) => /^Drop-in sink, .*two bowls$/.test(b.material))).toBe(true);
+  });
+});
+
+describe('a sink as the 3D view draws it', () => {
+  it('has its bowls, a drop-in its rim, an undermount hung under the top, a vessel on it', () => {
+    const drop = sinkLook({ mount: 'dropIn', width: len('33"'), depth: len('22"'), bowlDepth: len('9"'), shape: 'rectangle', double: { leftShare: 0.5 } }, 19);
+    expect(drop).toMatchObject({ colour: 'steel', rim: { width: len('33"').mm, depth: len('22"').mm } });
+    expect(drop.bowls).toHaveLength(2);
+    expect(drop.bowls[0]!.width).toBeCloseTo(drop.bowls[1]!.width, 6);
+    const under = sinkLook({ mount: 'undermount', width: len('19"'), depth: len('16"'), bowlDepth: len('6"'), shape: 'oval' }, 30);
+    expect(under).toMatchObject({ colour: 'white' });
+    expect(under.rim).toBeUndefined();
+    expect(under.bowls[0]!.top).toBeCloseTo(len('6"').mm - 30, 6);
+    expect(sinkLook(sinkOfKind({ size: { width: len('30"'), height: len('34"'), depth: len('21"') } }, 'vessel'), 19).vessel).toBe(true);
+  });
+
+  it('is carried by the part that stands for the sink', () => {
+    const project = withSink({ mount: 'dropIn' });
+    const [basin] = sinkShapes(project, project.materials, shop.hardware);
+    expect(basin!.sinkLook?.bowls).toHaveLength(1);
+    expect(basin!.size.width).toBeCloseTo(cabinetsOf(project)[0]!.sink!.width.mm, 6);
   });
 });

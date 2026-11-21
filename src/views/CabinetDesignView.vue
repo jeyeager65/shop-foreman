@@ -635,12 +635,11 @@ const materialLooks = computed(() => Object.fromEntries(store.materials.flatMap(
 })));
 /** The appliances as the whole-project view draws them: a block each, where it stands. */
 const applianceBlocks = computed(() => (store.materials[0] ? applianceShapes(store.project!, store.materials[0].id) : []));
-/** What each appliance's block is, so the 3D view draws its doors, handles and burners on it; a sink's basin too. */
+/** What each appliance's block is, so the 3D view draws its doors, handles and burners on it. (A sink draws itself.) */
 const applianceLooks = computed(() => {
   const kindOf = new Map(appliances.value.map((a) => [a.id, a.kind]));
   const blocks = applianceBlocks.value.map((a) => ({ partId: a.part.id, kind: kindOf.get(a.id)!, ...(a.kick ? { kick: a.kick } : {}) }));
-  const basins = (wholeProject.value ? projectParts.value : topShapes.value).filter((p) => p.id.includes('/appliance-sink-') && p.id.endsWith('/shape')).map((p) => ({ partId: p.id, kind: 'sink' as const }));
-  return [...blocks, ...basins];
+  return blocks;
 });
 /** With a room the whole project is worth showing even with one cabinet: it stands in the room. */
 const canShowAll = computed(() => cabinets.value.length > 1 || !!room.value);

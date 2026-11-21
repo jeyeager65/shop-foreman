@@ -10,7 +10,7 @@
  */
 import type { BoughtTop, CabinetDesign, CabinetSink, DesignedCabinetContext, Hardware, LeafEdge, Material, Mm, OwnTop, TopLeaf, Part, Point, Project, Run, TopDesign, TopSettings, TorsionSettings, TorsionTable, Vec3 } from '@/model';
 import { applianceFootprint, appliancePlace, applianceShapeId, appliancesOf, underCounter } from './appliances';
-import { SINK, roundedOutline, sinkCentre, sinkOpenings } from './sinks';
+import { SINK, roundedOutline, sinkCentre, sinkLook, sinkOpenings } from './sinks';
 import { LEAF, deriveTorsionParts, leafHardwareShapes, lightTopTable, torsionRibProblem, torsionThickness } from './torsion';
 import { DROP_LEAF, dropLeafShapes } from './dropLeaf';
 import { pocketRow } from './pocketHoles';
@@ -923,15 +923,12 @@ export function sinkShapes(project: Project, materials: Material[], hardware: Ha
   const cuts = sinkCuts(project, topPieces(project, materials)).filter((c) => c.sink.mount !== 'integrated');
   return [...integratedTopShapes(project), ...cuts.map((cut): Part => {
     const thick = topThickness(cut.piece.settings, materials, hardware);
-    const bowl = cut.sink.bowlDepth.mm;
-    // The bowl is drawn no further forward than what the doors close against: in a shallow case a sink's rim reaches
-    // past the case front, and its bowl showed through the doors.
-    const under = cabinetsOf(project).find((c) => c.id === cut.piece.cabinetId);
-    // A vessel stands on the top, as wide as it is.
-    const vessel = cut.sink.mount === 'vessel';
-    const [x0, zBack, front] = vessel ? [cut.cx - cut.sink.width.mm / 2, cut.cz - cut.sink.depth.mm / 2, cut.cz + cut.sink.depth.mm / 2] : [cut.x0, cut.zBack, cut.zFront];
-    const zFront = vessel ? front : Math.min(front, (under ? constructionRules(under, materials).frontPlane : 0) - 1);
-    const [width, depth] = [vessel ? cut.sink.width.mm : cut.x1 - cut.x0, zFront - zBack];
+    const sink = cut.sink;
+    const [width, depth, bowl] = [sink.width.mm, sink.depth.mm, sink.bowlDepth.mm];
+    // Its outside, centred where it sits; its back face the bowls' floor, its face A the top's surface (a vessel: its
+    // back face on the top's surface). On a row that faces the other way it is turned with it.
+    const d = cut.dir;
+    const surface = cut.piece.y + thick;
     return {
       id: `${cut.piece.id}/${applianceShapeId(`appliance-sink-${cut.cabinetId}`)}`,
       designObjectId: cut.piece.cabinetId,
@@ -940,7 +937,8 @@ export function sinkShapes(project: Project, materials: Material[], hardware: Ha
       size: { width, height: depth, thickness: bowl },
       features: [{ id: 'cutout', kind: 'cutout', face: 'A', outline: [{ x: 0, y: 0 }, { x: width, y: 0 }, { x: width, y: depth }, { x: 0, y: depth }] }],
       role: 'top',
-      placement: { origin: [x0, cut.piece.y + thick + (vessel ? bowl : -6), zFront], xAxis: [1, 0, 0], yAxis: [0, 0, -1] },
+      placement: { origin: [cut.cx - (d * width) / 2, surface + (sink.mount === 'vessel' ? bowl : 0), cut.cz + (d * depth) / 2], xAxis: [d, 0, 0], yAxis: [0, 0, -d] },
+      sinkLook: sinkLook(sink, thick),
     };
   })];
 }
@@ -987,7 +985,9 @@ function integratedTopShapes(project: Project): Part[] {
       size: { width: top.bowl.width, height: top.bowl.depth, thickness: sink.bowlDepth.mm },
       features: [{ id: 'cutout', kind: 'cutout', face: 'A', outline: [{ x: 0, y: 0 }, { x: top.bowl.width, y: 0 }, { x: top.bowl.width, y: top.bowl.depth }, { x: 0, y: top.bowl.depth }] }],
       role: 'top',
-      placement: { origin: [top.bowl.cx - top.bowl.width / 2, y + SINK.integratedThick - 6, top.bowl.cz + top.bowl.depth / 2], xAxis: [1, 0, 0], yAxis: [0, 0, -1] },
+      placement: { origin: [top.bowl.cx - top.bowl.width / 2, y + SINK.integratedThick, top.bowl.cz + top.bowl.depth / 2], xAxis: [1, 0, 0], yAxis: [0, 0, -1] },
+      // Its bowl, and a faucet on the top behind it.
+      sinkLook: { ...sinkLook({ ...sink, width: { mm: top.bowl.width, unit: 'mm' }, depth: { mm: top.bowl.depth, unit: 'mm' } }, 0), faucet: { x: top.bowl.width / 2, y: (top.bowl.depth + (top.bowl.cz + top.bowl.depth / 2 - top.zBack)) / 2, z: sink.bowlDepth.mm, height: 6 * MM_PER_INCH, reach: 4.5 * MM_PER_INCH } },
     };
     return [slab, basin];
   });

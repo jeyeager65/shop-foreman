@@ -28,6 +28,23 @@ export type PocketLook = ({ kind: 'kreg' } | { kind: 'cnc' } | { kind: 'low'; an
 };
 
 /**
+ * How a sink is drawn, on the part that stands for it (`sinkShapes`): display only, never stored or planned from. In
+ * the part's own frame: X across from the sink's left edge, Y back from its front edge, Z up from the part's back face.
+ * Each bowl is a shell from its opening (`top`) down to its floor, its sides drawing in; a drop-in has a rim lying on
+ * the top round them; a vessel is a bowl standing on the top, seen from outside too; a farmhouse sink has its apron in
+ * front. `faucet`: where its foot stands and how tall and far it reaches.
+ */
+export interface SinkLook {
+  colour: 'steel' | 'white';
+  shape: 'rectangle' | 'oval';
+  bowls: { cx: Mm; cy: Mm; width: Mm; depth: Mm; top: Mm; floor: Mm }[];
+  rim?: { width: Mm; depth: Mm; z: Mm };
+  vessel?: true;
+  apron?: { width: Mm; height: Mm; z: Mm };
+  faucet?: { x: Mm; y: Mm; z: Mm; height: Mm; reach: Mm };
+}
+
+/**
  * How a part moves with the 3D view's Doors slider when it is not an ordinary hinged door. Display
  * only, never stored or planned from. `tilt`: a false front on tilt-out hinges and its tray, which tip forward
  * about a level line across the cabinet through `axis` (y, z), the bottom edge of the front's back face. `turn`: about a vertical line through `axis` (x, z in its cabinet), as a
@@ -47,6 +64,8 @@ export type PartMoves = { kind: 'tilt'; axis: [Mm, Mm] } | { kind: 'turn'; axis:
 
 export interface Part {
   moves?: PartMoves;
+  /** Set on the part that stands for a sink: it is drawn as the sink, not as its block. Never stored, never planned from. */
+  sinkLook?: SinkLook;
   /** How its pocket holes are drawn. Left out: as the Kreg jig drills them. Never stored, never planned from. */
   pocketLook?: PocketLook;
   /** Stable, e.g. `${designObjectId}/door-left`. */

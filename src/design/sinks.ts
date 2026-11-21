@@ -5,7 +5,7 @@
  *
  * In the sink's own frame X runs across it to the right and Z toward the front, its centre at 0, 0.
  */
-import type { CabinetDesign, CabinetSink, Mm, SinkMount } from '@/model';
+import type { CabinetDesign, CabinetSink, Mm, SinkLook, SinkMount } from '@/model';
 import { MM_PER_INCH, len } from '@/units';
 
 const IN = MM_PER_INCH;
@@ -98,12 +98,12 @@ export function sinkInset(sink: Pick<CabinetSink, 'mount'>): Mm {
  * The bowls of a sink, in its own frame: each one's centre across, and its width (the outside, less the divider
  * between two). One bowl is the whole sink.
  */
-export function sinkBowls(sink: Pick<CabinetSink, 'width' | 'double'>): { x: Mm; width: Mm }[] {
+export function sinkBowls(sink: Pick<CabinetSink, 'width' | 'double'>, divider: Mm = SINK.divider): { x: Mm; width: Mm }[] {
   const w = sink.width.mm;
   if (!sink.double) return [{ x: 0, width: w }];
   const share = Math.min(0.8, Math.max(0.2, sink.double.leftShare));
-  const left = (w - SINK.divider) * share;
-  const right = w - SINK.divider - left;
+  const left = (w - divider) * share;
+  const right = w - divider - left;
   return [
     { x: -w / 2 + left / 2, width: left },
     { x: w / 2 - right / 2, width: right },
@@ -154,6 +154,45 @@ export function sinkBowlBlock(cabinet: Pick<CabinetDesign, 'size' | 'sink'>): { 
   const bottom = rimAt - sink.bowlDepth.mm;
   return { min: [cx - w / 2, bottom, cz - d / 2], max: [cx + w / 2, cabinet.size.height.mm, Math.min(0, cz + d / 2)] };
 }
+
+/** Tune me: how a sink is drawn. A drop-in's rim round its bowls, and the deck behind them its faucet stands on. */
+export const SINK_DRAWN = { lip: 1.25 * IN, deck: 2.5 * IN, divider: 1.5 * IN };
+
+/**
+ * A sink as the 3D view draws it (`SinkLook`), in the frame of the part that stands for it: its outside, `width` × `depth`,
+ * Z up from `bowlDepth` below the top's surface (a vessel: from the top's surface). `topThick`: the top's thickness,
+ * which an undermount sink hangs under. White for a vessel, a top with its sink, a farmhouse sink and a vanity's (under
+ * 18" deep); steel for the rest.
+ */
+export function sinkLook(sink: CabinetSink, topThick: Mm): SinkLook {
+  const [W, D, T] = [sink.width.mm, sink.depth.mm, sink.bowlDepth.mm];
+  const vanity = D < 18 * IN;
+  const colour = sink.mount === 'vessel' || sink.mount === 'integrated' || sink.mount === 'farmhouse' || vanity ? 'white' : 'steel';
+  const faucet = (y: Mm, z: Mm) => ({ x: W / 2, y, z, height: vanity || sink.mount === 'integrated' ? 6 * IN : sink.mount === 'vessel' ? 12 * IN : 14 * IN, reach: vanity || sink.mount === 'integrated' ? 4.5 * IN : 8 * IN });
+  if (sink.mount === 'vessel') {
+    return { colour, shape: sink.shape, vessel: true, bowls: [{ cx: W / 2, cy: D / 2, width: W, depth: D, top: T, floor: 0 }], faucet: faucet(D + 2 * IN, 0) };
+  }
+  if (sink.mount === 'dropIn') {
+    // Inside the rim: a lip at the sides and the front, the deck behind.
+    const inner = { width: W - 2 * SINK_DRAWN.lip, depth: D - SINK_DRAWN.lip - SINK_DRAWN.deck };
+    const split = sinkBowls({ width: { mm: inner.width, unit: 'mm' }, double: sink.double }, SINK_DRAWN.divider);
+    const bowls = split.map((b) => ({ cx: W / 2 + b.x, cy: SINK_DRAWN.lip + inner.depth / 2, width: b.width, depth: inner.depth, top: T, floor: 0 }));
+    return { colour, shape: sink.shape, bowls, rim: { width: W, depth: D, z: T }, faucet: faucet(D - SINK_DRAWN.deck / 2, T) };
+  }
+  if (sink.mount === 'integrated') return { colour, shape: sink.shape, bowls: [{ cx: W / 2, cy: D / 2, width: W, depth: D, top: T, floor: 0 }] };
+  // Under the top: each bowl as its opening, its walls from the top's underside.
+  const loops = sinkOpenings(sink);
+  const bowls = loops.map((loop) => {
+    const xs = loop.map((p) => p[0]);
+    const zs = loop.map((p) => p[1]);
+    return { cx: W / 2 + (Math.min(...xs) + Math.max(...xs)) / 2, cy: D / 2 - (Math.min(...zs) + Math.max(...zs)) / 2, width: Math.max(...xs) - Math.min(...xs), depth: Math.max(...zs) - Math.min(...zs), top: T - topThick, floor: 0 };
+  });
+  return { colour, shape: sink.shape, bowls, faucet: faucet(D + SINK.faucetBehind, T) };
+}
+
+/** A bought top with its sink in it is drawn white (cultured marble): its part's id, and its colour. */
+export const isSinkTop = (partId: string): boolean => partId.endsWith('/sink-top-shown');
+export const SINK_TOP_COLOUR = 0xf1f0ea;
 
 /** The sink in a few words: "Drop-in sink, 33" × 22", two bowls". */
 export function sinkWords(sink: CabinetSink, length: (mm: Mm) => string): string {

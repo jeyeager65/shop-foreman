@@ -31,6 +31,8 @@ import { isApplianceShape } from '@/design/appliances';
 import { hubShapeColour } from '@/design/hub';
 import type { ApplianceKind } from '@/model';
 import { FALSE_FRONT } from '@/design/falseFront';
+import { SINK_TOP_COLOUR, isSinkTop } from '@/design/sinks';
+import { sinkObject } from './sinkDrawing';
 import { BIFOLD_UNFOLD_DEG, type CabinetAssembly, MAX_DOOR_OPEN_DEG, type PlacedPart, type SlideMount, buildCabinetAssembly, placedDoorPose, grainStreaks, insetSwingShift } from '@/design/cabinetAssembly';
 import type { SolidMesh } from '@/geometry/solids';
 import { finishedColor, showsGrain } from '@/design/finish';
@@ -71,7 +73,7 @@ const props = withDefaults(
      */
     casters?: { cabinetId: string; x: number; behind: number; locking: boolean; caster: Caster }[];
     /** What each appliance's block is, by its part: its doors, handles, burners and the like are drawn on it. */
-    appliances?: { partId: string; kind: ApplianceKind | 'sink'; /** A dishwasher's toe kick under its block: how high, and its face's distance from the wall. */ kick?: { height: number; face: number } }[];
+    appliances?: { partId: string; kind: ApplianceKind; /** A dishwasher's toe kick under its block: how high, and its face's distance from the wall. */ kick?: { height: number; face: number } }[];
     /**
      * How each material looks bare, by its id: its type's colour, and wood grain, OSB's strands or nothing on
      * it. The realistic look draws a part as its material; the plain one keeps its colours by what the part is.
@@ -383,6 +385,8 @@ const materials = {
   applianceDark: new THREE.MeshStandardMaterial({ color: 0x34383f, metalness: 0.2, roughness: 0.6 }),
   applianceGlass: new THREE.MeshStandardMaterial({ color: 0x14171c, metalness: 0.6, roughness: 0.15 }),
   cooktop: new THREE.MeshStandardMaterial({ color: 0x1b1d21, metalness: 0.3, roughness: 0.5 }),
+  /** A sink of white china or fireclay, and a top with its sink in it (cultured marble). */
+  porcelain: new THREE.MeshStandardMaterial({ color: 0xf1f0ea, metalness: 0, roughness: 0.25 }),
   hole: new THREE.MeshStandardMaterial({ color: 0x2b2e33, metalness: 0.2, roughness: 0.8 }),
   printed: new THREE.MeshStandardMaterial({ color: 0x3d4350, metalness: 0.05, roughness: 0.75 }),
   // A caster's wheel, light enough to read against the view's dark background, and its brake pedal.
@@ -994,16 +998,17 @@ function show(response: SolidResponse, { parts, cabinets, room }: Shown) {
       const front = source?.grain ? materials.frame : materials.front;
       // An appliance is a plain block of metal, with no finish of the project's.
       const appliance = isApplianceShape(part.partId);
-      const tint = hubShapeColour(part.partId);
+      // A hub's bought pieces have their own colours; a bought top with its sink in it is white.
+      const tint = hubShapeColour(part.partId) ?? (isSinkTop(part.partId) ? SINK_TOP_COLOUR : undefined);
       const bare = tint !== undefined ? tinted(tint) : appliance ? materials.appliance : source?.existing ? materials.existing : part.role === 'top' || part.role === 'topEdge' ? materials.frame : !part.role || part.role === 'blindPanel' ? front : part.role === 'back' ? materials.back : part.role === 'frameStile' || part.role === 'frameRail' || part.role === 'buildOut' ? materials.frame : materials.case;
       // Its finish: the fronts' for a door or a drawer front (the front of the box, where that is the drawer's front),
       // none for the rest of a drawer box, the case's for everything else.
       const showFront = !part.role || part.role === 'blindPanel' || (part.role === 'boxFront' && !parts.some((p) => !p.role && p.designObjectId === source?.designObjectId));
       const top = part.role === 'top' || part.role === 'topEdge';
-      const finish = appliance || source?.existing ? undefined : top ? drawnFinish.value?.tops : showFront ? drawnFinish.value?.fronts : part.role?.startsWith('box') ? undefined : drawnFinish.value?.case;
+      const finish = appliance || tint !== undefined || source?.existing ? undefined : top ? drawnFinish.value?.tops : showFront ? drawnFinish.value?.fronts : part.role?.startsWith('box') ? undefined : drawnFinish.value?.case;
       // Only a material with grain (a plywood, a solid wood) is drawn as wood; an appliance's block has none to speak of.
       // Its material's look, when the view was told it; else wood only where the material has grain.
-      const as = !appliance && source && !source.existing ? props.looks?.[source.materialId] : undefined;
+      const as = !appliance && tint === undefined && source && !source.existing ? props.looks?.[source.materialId] : undefined;
       const wood = as ? typed(bare, as) : appliance || source?.grain ? bare : withoutGrain(bare);
       // Each face as it is finished: a side painted outside and bare inside, a back bare against the wall.
       const faces = appliance || source?.existing ? undefined : props.faces?.[part.partId];
@@ -1015,14 +1020,18 @@ function show(response: SolidResponse, { parts, cabinets, room }: Shown) {
       // Its faces and its edges, which may have a look of their own, laid out once across the part's thickness.
       const edge = edgeSurfaces.get(rim);
       const skin = withTextureCoordinates(geometry, source?.grain, shift / 997, edge ? source?.size.thickness : undefined);
-      const solidMesh = new THREE.Mesh(skin, [dressed(faces?.A), dressed(faces?.B), edge ?? rim]);
-      skins.push({ mesh: solidMesh, dressed: solidMesh.material as THREE.Material[], materialId: source?.materialId, partId: part.partId, own: !!source && !appliance && tint === undefined && !source.existing });
-      object.add(solidMesh);
-      // A torsion table's inner ribs get no outline: they are shut in between its skins, and at a shallow angle their
-      // outlines would draw through a thin skin (every surface is set back a little in depth for its own outline's sake,
-      // by more the shallower it is seen). The ribs round its edge, which show, keep theirs.
-      const innerRib = part.role === 'rib' && /^(Long|Short) rib\b/.test(source?.name ?? '');
-      if (!innerRib) object.add(new THREE.LineSegments(new THREE.EdgesGeometry(geometry, 20), part.role ? materials.outline : materials.frontOutline));
+      // A sink is drawn as itself, not as the block that stands for it.
+      if (source?.sinkLook) object.add(sinkObject(source.sinkLook, { steel: materials.appliance, white: materials.porcelain, dark: materials.applianceDark }));
+      else {
+        const solidMesh = new THREE.Mesh(skin, [dressed(faces?.A), dressed(faces?.B), edge ?? rim]);
+        skins.push({ mesh: solidMesh, dressed: solidMesh.material as THREE.Material[], materialId: source?.materialId, partId: part.partId, own: !!source && !appliance && tint === undefined && !source.existing });
+        object.add(solidMesh);
+        // A torsion table's inner ribs get no outline: they are shut in between its skins, and at a shallow angle their
+        // outlines would draw through a thin skin (every surface is set back a little in depth for its own outline's sake,
+        // by more the shallower it is seen). The ribs round its edge, which show, keep theirs.
+        const innerRib = part.role === 'rib' && /^(Long|Short) rib\b/.test(source?.name ?? '');
+        if (!innerRib) object.add(new THREE.LineSegments(new THREE.EdgesGeometry(geometry, 20), part.role ? materials.outline : materials.frontOutline));
+      }
       // The grain: faint streaks on both faces. The solid's Z runs from the back face (0) up to face A (the thickness).
       const lift = 0.15;
       const streaked = source ? [...(showsGrain(finishOf(faces?.A)) ? [source.size.thickness + lift] : []), ...(showsGrain(finishOf(faces?.B)) ? [-lift] : [])] : [];
@@ -1301,10 +1310,9 @@ function addHinges(door: THREE.Group, part: PlacedPart, source: Part) {
 /**
  * What makes an appliance's block read as the appliance: plain boxes and bars on its faces, nothing
  * measured from a real one. The block's solid has X across its front, Y up from its underside and Z
- * from its back (0) to its front (its depth). A sink's basin lies flat instead: X across it, Y from
- * its front edge to its back, Z up from the bowl's floor to just under the top's surface.
+ * from its back (0) to its front (its depth). (A sink is drawn as itself: `sinkDrawing.ts`.)
  */
-function addApplianceLook(block: THREE.Group, kind: ApplianceKind | 'sink', size: { width: number; height: number; thickness: number }, kick?: { height: number; face: number }) {
+function addApplianceLook(block: THREE.Group, kind: ApplianceKind, size: { width: number; height: number; thickness: number }, kick?: { height: number; face: number }) {
   const { width: w, height: h, thickness: d } = size;
   const box = (bw: number, bh: number, bd: number, material: THREE.Material, x: number, y: number, z: number) => {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), material);
@@ -1360,25 +1368,6 @@ function addApplianceLook(block: THREE.Group, kind: ApplianceKind | 'sink', size
     bar(h * 0.66, 9, metal, w * 0.72, h * 0.47, d + 34, 'y');
     for (const end of [-1, 1]) bar(34, 6, metal, w * 0.72, h * 0.47 + end * h * 0.28, d + 17, 'z');
     box(w - 12, 14, 3, dark, w / 2, h - 12, f);
-  } else if (kind === 'sink') {
-    // Seen from above: a rim lapping the top, two bowls with their drains, a faucet on the deck behind them.
-    const top = d + 8;
-    const lap = 14;
-    box(w + 2 * lap, lap, 4, steel, w / 2, -lap / 2, top);
-    box(w + 2 * lap, lap, 4, steel, w / 2, h + lap / 2, top);
-    box(lap, h, 4, steel, -lap / 2, h / 2, top);
-    box(lap, h, 4, steel, w + lap / 2, h / 2, top);
-    const deck = Math.min(90, h * 0.2);
-    const [bw, bh] = [w / 2 - 34, h - deck - 28];
-    for (const x of [w * 0.25 + 4, w * 0.75 - 4]) {
-      box(bw, bh, 3, materials.metalDark, x, 22 + bh / 2, d + 1.5);
-      bar(4, 24, dark, x, 22 + bh / 2, d + 4, 'z');
-    }
-    const [fx, fy] = [w / 2, h - deck / 2];
-    bar(250, 13, metal, fx, fy, top + 125, 'z');
-    bar(170, 11, metal, fx, fy - 85, top + 250, 'y');
-    bar(46, 11, metal, fx, fy - 170, top + 232, 'z');
-    bar(60, 9, metal, fx + 70, fy, top + 30, 'z');
   }
 }
 
