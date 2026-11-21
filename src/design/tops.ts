@@ -10,7 +10,7 @@
  */
 import type { BoughtTop, CabinetDesign, CabinetSink, DesignedCabinetContext, Hardware, LeafEdge, Material, Mm, OwnTop, TopLeaf, Part, Point, Project, Run, TopDesign, TopSettings, TorsionSettings, TorsionTable, Vec3 } from '@/model';
 import { applianceFootprint, appliancePlace, applianceShapeId, appliancesOf, underCounter } from './appliances';
-import { SINK, apronOf, farmhouseRow, faucetHoles, roundedOutline, sinkCentre, sinkLook, sinkOpenings } from './sinks';
+import { SINK, apronOf, farmhouseRow, faucetHoles, integratedBowl, roundedOutline, sinkCentre, sinkLook, sinkOpenings } from './sinks';
 import { LEAF, deriveTorsionParts, leafHardwareShapes, lightTopTable, torsionRibProblem, torsionThickness } from './torsion';
 import { DROP_LEAF, dropLeafShapes } from './dropLeaf';
 import { pocketRow } from './pocketHoles';
@@ -982,7 +982,7 @@ export function integratedTop(cabinet: CabinetDesign): { x0: Mm; x1: Mm; zBack: 
   const [cx] = sinkCentre(cabinet);
   const [x0, zBack] = [cx - sink.width.mm / 2, -cabinet.size.depth.mm];
   const zFront = zBack + sink.depth.mm;
-  return { x0, x1: x0 + sink.width.mm, zBack, zFront, bowl: { cx, cz: (zBack + zFront) / 2 + sink.depth.mm * 0.05, width: sink.width.mm * SINK.integratedBowl.width, depth: sink.depth.mm * SINK.integratedBowl.depth } };
+  return { x0, x1: x0 + sink.width.mm, zBack, zFront, bowl: integratedBowl(cabinet)! };
 }
 
 /**

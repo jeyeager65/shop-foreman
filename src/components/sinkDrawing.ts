@@ -8,8 +8,11 @@ import * as THREE from 'three';
 import type { SinkLook } from '@/model';
 import { roundedOutline } from '@/design/sinks';
 
-/** How much a bowl's floor is smaller than its opening, each way: a sink's sides slope in; a vessel's more. */
-const FLOOR_SCALE = { sink: 0.86, vessel: 0.5 };
+/**
+ * How much a bowl's flat floor is smaller than its opening, each way: a square-cornered sink's floor is most of it, a
+ * round bowl's (a vanity's) much less, its sides curving down to it; a vessel's least.
+ */
+const FLOOR_SCALE = { rectangle: 0.8, oval: 0.45, vessel: 0.4 };
 const CORNER = { opening: 30, floor: 45 };
 
 export interface SinkMaterials {
@@ -23,14 +26,32 @@ function loopAt(outline: [number, number][], cx: number, cy: number, z: number):
   return outline.map(([x, f]) => new THREE.Vector3(cx + x, cy - f, z));
 }
 
-/** The walls between two loops of as many points each, and the floor inside the lower one. */
+/** How many rings the curve from a bowl's wall into its floor is drawn in. */
+const CURVE_RINGS = 10;
+
+/**
+ * A bowl between two loops of as many points each, the opening (`top`) and the floor's edge (`bottom`): its wall goes
+ * down from the opening nearly straight, then rounds into the floor, a quarter of an ellipse in section; then the floor.
+ */
 function bowlGeometry(top: THREE.Vector3[], bottom: THREE.Vector3[]): THREE.BufferGeometry {
   const positions: number[] = [];
   const n = top.length;
   const push = (...v: THREE.Vector3[]) => v.forEach((p) => positions.push(p.x, p.y, p.z));
-  for (let i = 0; i < n; i++) {
-    const j = (i + 1) % n;
-    push(top[i]!, bottom[i]!, bottom[j]!, top[i]!, bottom[j]!, top[j]!);
+  // Ring k at angle θ = k/K · 90°: across, from the opening (cos θ = 1) to the floor's edge; down, sin θ of the way.
+  const rings = Array.from({ length: CURVE_RINGS + 1 }, (_, k) => {
+    const theta = ((Math.PI / 2) * k) / CURVE_RINGS;
+    const [across, down] = [Math.cos(theta), Math.sin(theta)];
+    return top.map((t, i) => {
+      const b = bottom[i]!;
+      return new THREE.Vector3(b.x + (t.x - b.x) * across, b.y + (t.y - b.y) * across, t.z + (b.z - t.z) * down);
+    });
+  });
+  for (let k = 0; k < CURVE_RINGS; k++) {
+    const [upper, lower] = [rings[k]!, rings[k + 1]!];
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      push(upper[i]!, lower[i]!, lower[j]!, upper[i]!, lower[j]!, upper[j]!);
+    }
   }
   // The floor: a fan from its middle.
   const middle = bottom.reduce((m, p) => m.add(p), new THREE.Vector3()).multiplyScalar(1 / n);
@@ -59,7 +80,7 @@ export function sinkObject(look: SinkLook, materials: SinkMaterials): THREE.Grou
   };
   const shell = twoSided(body);
   for (const b of look.bowls) {
-    const scale = look.vessel ? FLOOR_SCALE.vessel : FLOOR_SCALE.sink;
+    const scale = look.vessel ? FLOOR_SCALE.vessel : FLOOR_SCALE[look.shape];
     const opening = roundedOutline(b.width, b.depth, look.shape, CORNER.opening);
     const floor = roundedOutline(b.width * scale, b.depth * scale, look.shape, CORNER.floor);
     group.add(new THREE.Mesh(bowlGeometry(loopAt(opening, b.cx, b.cy, b.top), loopAt(floor, b.cx, b.cy, b.floor)), shell));

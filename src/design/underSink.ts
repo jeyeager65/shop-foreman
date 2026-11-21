@@ -311,16 +311,20 @@ function blocksInBox(cabinet: CabinetDesign, materials: Material[]): ObstacleBlo
   const ceiling = cabinet.size.height.mm - tCase;
   const depth = insideDepth(cabinet, materials);
   const blocks: ObstacleBlock[] = [];
+  // The cabinet's own sink: its bowl hangs under the top, from the sink's sizes, not measured.
+  const bowl = sinkBowlBlock(cabinet);
   for (const o of cabinet.inside.obstacles) {
     const x0 = o.fromLeft ? tCase + o.fromLeft.mm : W / 2 - o.width.mm / 2;
     const z0 = -depth + (o.fromBack?.mm ?? 0);
     const y0 = floor + (o.clearUnder?.mm ?? 0);
-    const y1 = o.height ? Math.min(ceiling, y0 + o.height.mm) : ceiling;
+    const z1 = Math.min(0, z0 + o.depth.mm);
+    // With no height of its own a block goes up to the top, or under the sink's bowl to its underside: a trap hangs
+    // from the bowl's drain, it does not stand in the bowl.
+    const underBowl = bowl && x0 < bowl.max[0] && x0 + o.width.mm > bowl.min[0] && z0 < bowl.max[2] && z1 > bowl.min[2];
+    const y1 = o.height ? Math.min(ceiling, y0 + o.height.mm) : underBowl ? Math.min(ceiling, bowl.min[1]) : ceiling;
     if (y1 <= y0 || o.width.mm <= 0 || o.depth.mm <= 0) continue;
-    blocks.push({ id: o.id, kind: o.kind, name: obstacleName(o), min: [x0, y0, z0], max: [x0 + o.width.mm, y1, Math.min(0, z0 + o.depth.mm)] });
+    blocks.push({ id: o.id, kind: o.kind, name: obstacleName(o), min: [x0, y0, z0], max: [x0 + o.width.mm, y1, z1] });
   }
-  // The cabinet's own sink: its bowl hangs under the top, from the sink's sizes, not measured.
-  const bowl = sinkBowlBlock(cabinet);
   if (bowl && bowl.min[1] < ceiling) blocks.push({ id: SINK_BOWL_BLOCK, kind: 'bowl', name: "the sink's bowl", min: bowl.min, max: [bowl.max[0], ceiling, bowl.max[2]] });
   return blocks;
 }

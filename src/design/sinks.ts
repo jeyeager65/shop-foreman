@@ -196,14 +196,32 @@ export function sinkCentre(cabinet: Pick<CabinetDesign, 'size' | 'sink'>, front:
 export function sinkBowlBlock(cabinet: Pick<CabinetDesign, 'size' | 'sink'>): { min: [Mm, Mm, Mm]; max: [Mm, Mm, Mm] } | undefined {
   const sink = cabinet.sink;
   if (!sink || sink.mount === 'vessel') return undefined;
+  // A top with its sink in it: its bowl, from the top's surface down.
+  if (sink.mount === 'integrated') {
+    const b = integratedBowl(cabinet)!;
+    const surface = cabinet.size.height.mm + SINK.integratedThick;
+    return { min: [b.cx - b.width / 2, surface - sink.bowlDepth.mm, b.cz - b.depth / 2], max: [b.cx + b.width / 2, cabinet.size.height.mm, Math.min(0, b.cz + b.depth / 2)] };
+  }
   const [cx, cz] = sinkCentre(cabinet);
-  const inset = sink.mount === 'dropIn' || sink.mount === 'integrated' ? sinkInset({ mount: 'dropIn' }) : 0;
+  const inset = sink.mount === 'dropIn' ? sinkInset({ mount: 'dropIn' }) : 0;
   const [w, d] = [sink.width.mm - 2 * inset, sink.depth.mm - 2 * inset];
-  // The rim of a drop-in or an integrated top lies on the top; an undermount hangs under it; a farmhouse sink stands
-  // on its platform, its body from there up.
-  const rimAt = cabinet.size.height.mm + (sink.mount === 'dropIn' || sink.mount === 'integrated' ? SINK.topGuess : 0);
+  // A drop-in's rim lies on the top; an undermount hangs under it; a farmhouse sink stands on its platform, its body
+  // from there up.
+  const rimAt = cabinet.size.height.mm + (sink.mount === 'dropIn' ? SINK.topGuess : 0);
   const bottom = sink.mount === 'farmhouse' ? farmhouseFloor(cabinet) : rimAt - sink.bowlDepth.mm;
   return { min: [cx - w / 2, bottom, cz - d / 2], max: [cx + w / 2, cabinet.size.height.mm, Math.min(0, cz + d / 2)] };
+}
+
+/**
+ * The bowl of a bought top with its sink in it, in its cabinet's frame: its centre and size. The top's back is the
+ * cabinet's; the bowl is a share of the top's width and depth, a little forward of its middle (tune me).
+ */
+export function integratedBowl(cabinet: Pick<CabinetDesign, 'size' | 'sink'>): { cx: Mm; cz: Mm; width: Mm; depth: Mm } | undefined {
+  const sink = cabinet.sink;
+  if (!sink || sink.mount !== 'integrated') return undefined;
+  const [cx] = sinkCentre(cabinet);
+  const zBack = -cabinet.size.depth.mm;
+  return { cx, cz: zBack + sink.depth.mm / 2 + sink.depth.mm * 0.05, width: sink.width.mm * SINK.integratedBowl.width, depth: sink.depth.mm * SINK.integratedBowl.depth };
 }
 
 /** Tune me: how a sink is drawn. A drop-in's rim round its bowls, and the deck behind them its faucet stands on. */
