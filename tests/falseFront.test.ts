@@ -1,10 +1,10 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { FALSE_FRONT, buildCabinetAssembly, cabinetsOf, deriveCabinetOpenings, deriveCabinetParts, deriveDrawerBoxParts, deriveParts, isDrawer, designsOf } from '@/design';
+import { FALSE_FRONT, falseFrontProblems, buildCabinetAssembly, cabinetsOf, deriveCabinetOpenings, deriveCabinetParts, deriveDrawerBoxParts, deriveParts, isDrawer, designsOf } from '@/design';
 import { buildJob } from '@/job/buildJob';
 import { buildLists } from '@/job/lists';
 import { createStarterShop } from '@/libraries';
-import type { ConstructionStyle, Project, StoredDrawer } from '@/model';
+import type { CasesContext, ConstructionStyle, Project, StoredDrawer } from '@/model';
 import { createBaseCabinetProject, setBays } from '@/samples/cabinet';
 import { len } from '@/units';
 
@@ -73,9 +73,36 @@ describe('a false front', () => {
     expect(lists(p).hardware.find((h) => h.group === 'False fronts')).toMatchObject({ quantity: 2 });
   });
 
-  it('too deep a tray is refused', () => {
+  it('too deep a tray is held to 4"', () => {
     const p = project('frameless', true);
     (p.designObjects.find((d) => d.template === 'drawer') as StoredDrawer).falseFront = { tiltOut: { depth: len('6"') } };
-    expect(() => deriveCabinetParts(p, shop)).toThrow(/1-1\/2" to 4"/);
+    const end = deriveCabinetParts(p, shop).find((part) => part.name === 'Tilt-out tray, left end')!;
+    expect(end.size.width).toBeCloseTo(FALSE_FRONT.trayDepth.max, 6);
+  });
+
+  it('over a sink, is made shallower to clear its bowl, never refused; with no room at all there is none, and it says why', () => {
+    const p = project('frameless', true);
+    const stored = (p.context as CasesContext).pieces[0]!;
+    stored.size.depth = len('21"');
+    stored.top = {};
+    stored.sink = { mount: 'undermount', width: len('19"'), depth: len('16"'), bowlDepth: len('6"'), shape: 'oval' };
+    (p.designObjects.find((d) => d.template === 'drawer') as StoredDrawer).falseFront = { tiltOut: { depth: len('4"') } };
+    const cabinet = cabinetsOf(p)[0]!;
+    expect(() => deriveCabinetParts(p, shop)).not.toThrow();
+    const end = deriveCabinetParts(p, shop).find((part) => part.name === 'Tilt-out tray, left end');
+    const problems = falseFrontProblems(p, cabinet, shop.materials, (mm) => `${Math.round(mm)} mm`);
+    // The bowl sits behind the front stretcher, so a tray of about 2-1/2" fits in front of it.
+    expect(end!.size.width).toBeLessThan(len('4"').mm);
+    expect(end!.size.width).toBeGreaterThanOrEqual(FALSE_FRONT.trayDepth.min);
+    expect(problems[0]?.words).toMatch(/is made .* deep, not/);
+    // Moved forward, the bowl leaves no room: no tray, and why.
+    // (A 20" sink on this 21" case: between the stretchers its bowl comes within an inch and a half of the front.)
+    stored.sink = { ...stored.sink!, depth: len('20"') };
+    const none = falseFrontProblems(p, cabinetsOf(p)[0]!, shop.materials, (mm) => `${Math.round(mm)} mm`);
+    expect(none[0]?.words).toMatch(/no room for the tilt-out tray/);
+    expect(deriveCabinetParts(p, shop).some((part) => part.name === 'Tilt-out tray, left end')).toBe(false);
+    // However tall the front, the tray is at most 3" tall.
+    const tall = deriveCabinetParts(project('frameless', true), shop).find((part) => part.name === 'Tilt-out tray, left end')!;
+    expect(tall.size.height).toBeLessThanOrEqual(FALSE_FRONT.trayTall + 1e-6);
   });
 });

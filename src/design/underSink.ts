@@ -304,7 +304,8 @@ export function obstacleBlocks(cabinet: CabinetDesign, materials: Material[]): O
 }
 
 function blocksInBox(cabinet: CabinetDesign, materials: Material[]): ObstacleBlock[] {
-  if (!cabinet.inside || !takesSink(cabinet)) return [];
+  // (The sink's own bowl is in the way whether or not the cabinet is fitted out inside.)
+  if ((!cabinet.inside && !cabinet.sink) || !takesSink(cabinet)) return [];
   const W = cabinet.size.width.mm;
   const tCase = thicknessOf(materials, cabinet.materials.caseId);
   const floor = toeKickOf(cabinet).height + tCase + constructionRules(cabinet, materials).bottomLift;
@@ -313,7 +314,7 @@ function blocksInBox(cabinet: CabinetDesign, materials: Material[]): ObstacleBlo
   const blocks: ObstacleBlock[] = [];
   // The cabinet's own sink: its bowl hangs under the top, from the sink's sizes, not measured.
   const bowl = sinkBowlBlock(cabinet);
-  for (const o of cabinet.inside.obstacles) {
+  for (const o of cabinet.inside?.obstacles ?? []) {
     const x0 = o.fromLeft ? tCase + o.fromLeft.mm : W / 2 - o.width.mm / 2;
     const z0 = -depth + (o.fromBack?.mm ?? 0);
     const y0 = floor + (o.clearUnder?.mm ?? 0);

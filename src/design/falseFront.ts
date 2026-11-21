@@ -22,8 +22,10 @@ export const FALSE_FRONT = {
   /** A fixed front's blocks: how far back from the front they run, and how much shorter than the opening they are. */
   blockDepth: 1.5 * MM_PER_INCH,
   blockShort: MM_PER_INCH,
-  /** The tray inside the opening: narrower than it, shorter than it, and how deep it may be. */
+  /** The tray inside the opening: narrower than it, shorter than it, at most this tall, how deep it may be, and how far clear of what is behind it. */
   trayNarrower: MM_PER_INCH,
+  trayTall: 3 * MM_PER_INCH,
+  clear: MM_PER_INCH / 4,
   trayShorter: MM_PER_INCH / 2,
   trayDepth: { min: 1.5 * MM_PER_INCH, max: 4 * MM_PER_INCH, start: 2.5 * MM_PER_INCH },
   /** The tray's lip, at its back: no taller than this. */
@@ -64,14 +66,14 @@ export function falseFrontsOf(project: Project, cabinet: CabinetDesign, material
 }
 
 /**
- * What a cabinet's false fronts bring: a fixed one's two blocks, or a tilt-out one's tray. A tray that would run into
- * something in the way under the sink (its bowl, its trap) throws.
+ * What a cabinet's false fronts bring: a fixed one's two blocks, or a tilt-out one's tray, made shallower to clear what is
+ * in the way behind it (the sink's bowl, the trap), or left out where it cannot (`falseFrontProblems` says why).
  */
 export function falseFrontParts(project: Project, cabinet: CabinetDesign, materials: Material[]): Part[] {
   const fronts = falseFrontsOf(project, cabinet, materials);
   if (!fronts.length) return [];
   const rules = constructionRules(cabinet, materials);
-  const blocks = cabinet.inside ? obstacleBlocks(cabinet, materials) : [];
+  const blocks = cabinet.inside || cabinet.sink ? obstacleBlocks(cabinet, materials) : [];
   const parts: Part[] = [];
   const add = (id: string, name: string, materialId: string, size: Part['size'], origin: Vec3, xAxis: Vec3, yAxis: Vec3, moves?: PartMoves) => {
     const part: Part = {
@@ -112,15 +114,9 @@ export function falseFrontParts(project: Project, cabinet: CabinetDesign, materi
     }
     const [boxId, bottomId] = [design.box.materials.boxId, design.box.materials.bottomId];
     const [t, tB] = [thicknessOf(materials, boxId), thicknessOf(materials, bottomId)];
-    const width = opening.width - FALSE_FRONT.trayNarrower;
-    const height = opening.height - FALSE_FRONT.trayShorter;
-    const deep = tilt.depth.mm;
-    if (!(width >= 6 * MM_PER_INCH) || !(height >= 2 * MM_PER_INCH) || !(deep >= FALSE_FRONT.trayDepth.min - 1e-6) || deep > FALSE_FRONT.trayDepth.max + 1e-6) {
-      throw new Error('A tilt-out tray needs a false front at least 7" wide and 2-1/2" high, and is 1-1/2" to 4" from front to back.');
-    }
-    const [x0, y0, z0] = [opening.origin.x + (opening.width - width) / 2, opening.origin.y + FALSE_FRONT.trayShorter / 2, back.z];
-    const hit = blocks.filter((b) => b.max[0] > x0 && b.min[0] < x0 + width && b.max[1] > y0 && b.max[2] > z0 - deep);
-    if (hit.length) throw new Error(`${hit[0]!.name.charAt(0).toUpperCase()}${hit[0]!.name.slice(1)} comes too far forward for the tilt-out tray behind the false front: make the tray shallower.`);
+    const fit = tiltTrayFit(design, opening, back.z, blocks);
+    if ('problem' in fit) continue;
+    const { width, height, depth: deep, x0, y0, z0 } = fit;
     const moves = falseFrontTilt(design, opening, materials);
     const lip = Math.min(height, FALSE_FRONT.lip);
     add(`${key}/tray-bottom`, named('Tilt-out tray, bottom'), bottomId, { width: width - 2 * t, height: deep - tB, thickness: tB }, [x0 + t, y0 + tB, z0], RIGHT, BACK, moves);
@@ -130,4 +126,40 @@ export function falseFrontParts(project: Project, cabinet: CabinetDesign, materi
     add(`${key}/tray-end-right`, named('Tilt-out tray, right end'), boxId, end, [x0 + width - t, y0, z0 - deep], FRONT, UP, moves);
   }
   return parts;
+}
+
+/** Where a false front's tilt-out tray goes, or why it cannot: its size and its corner (left, bottom, front), in the cabinet's frame. */
+type TrayFit = { width: Mm; height: Mm; depth: Mm; x0: Mm; y0: Mm; z0: Mm; shallower?: true } | { problem: string };
+
+/**
+ * A tilt-out tray behind a false front, sized to it: 1" narrower and 1/2" shorter than its opening, at most 3" tall
+ * (it is a trough, however tall the front), as deep as asked but no deeper than what is in the way behind it (the
+ * sink's bowl, the trap) leaves, 1/4" clear. Too small a front, or too little room, and there is none: why, in words.
+ */
+function tiltTrayFit(design: DrawerDesign, opening: CabinetOpening, frontBackZ: Mm, blocks: { name: string; min: Vec3; max: Vec3 }[]): TrayFit {
+  const asked = design.falseFront?.tiltOut?.depth.mm ?? FALSE_FRONT.trayDepth.start;
+  const width = opening.width - FALSE_FRONT.trayNarrower;
+  const height = Math.min(FALSE_FRONT.trayTall, opening.height - FALSE_FRONT.trayShorter);
+  if (!(width >= 6 * MM_PER_INCH) || !(height >= 2 * MM_PER_INCH)) return { problem: 'This false front is too small for a tilt-out tray: it needs one at least 7" wide and 2-1/2" high.' };
+  const [x0, y0, z0] = [opening.origin.x + (opening.width - width) / 2, opening.origin.y + FALSE_FRONT.trayShorter / 2, frontBackZ];
+  // What stands behind it, across it and as high as it: the tray stops in front of the nearest.
+  const behind = blocks.filter((b) => b.max[0] > x0 && b.min[0] < x0 + width && b.max[1] > y0 && b.min[1] < y0 + height && b.max[2] < z0);
+  const room = behind.length ? z0 - Math.max(...behind.map((b) => b.max[2])) - FALSE_FRONT.clear : Infinity;
+  const depth = Math.min(Math.max(FALSE_FRONT.trayDepth.min, Math.min(asked, FALSE_FRONT.trayDepth.max)), room);
+  if (depth < FALSE_FRONT.trayDepth.min - 1e-6) {
+    const near = behind.reduce((a, b) => (b.max[2] > a.max[2] ? b : a));
+    return { problem: `There is no room for the tilt-out tray: ${near.name} stands ${Math.max(0, Math.round((z0 - near.max[2]) / MM_PER_INCH * 8) / 8)}" behind the false front, and a tray needs 1-1/2". Make the false front shorter, so the tray sits higher, or turn the tray off.` };
+  }
+  return { width, height, depth, x0, y0, z0, ...(depth < asked - 0.5 ? { shallower: true as const } : {}) };
+}
+
+/** What a cabinet's false fronts' trays cannot do, in sentences: none fits, or one is made shallower than asked to clear what is behind it. */
+export function falseFrontProblems(project: Project, cabinet: CabinetDesign, materials: Material[], length: (mm: Mm) => string): { drawerId: string; words: string }[] {
+  const blocks = cabinet.inside || cabinet.sink ? obstacleBlocks(cabinet, materials) : [];
+  return falseFrontsOf(project, cabinet, materials).flatMap(({ design, opening }) => {
+    if (!design.falseFront?.tiltOut) return [];
+    const fit = tiltTrayFit(design, opening, frontBack(design, opening, materials).z, blocks);
+    if ('problem' in fit) return [{ drawerId: design.id, words: fit.problem }];
+    return fit.shallower ? [{ drawerId: design.id, words: `The tilt-out tray is made ${length(fit.depth)} deep, not ${length(design.falseFront.tiltOut.depth.mm)}: that is all the room in front of what stands behind it.` }] : [];
+  });
 }

@@ -53,7 +53,7 @@ import { useAppStore } from '@/stores/app';
 import { wideFrontFields } from '@/components/wideFront';
 
 /** `frontOnly`: the drawer is in a cabinet that is already there, and only its front is made. */
-const props = defineProps<{ design: DrawerDesign; opening: Opening; fixed?: CabinetOpening['fixedOverlay']; inset?: CabinetOpening['inset']; shared?: boolean; frontOnly?: boolean; overDoors?: boolean }>();
+const props = defineProps<{ design: DrawerDesign; opening: Opening; fixed?: CabinetOpening['fixedOverlay']; inset?: CabinetOpening['inset']; shared?: boolean; frontOnly?: boolean; overDoors?: boolean; /** What its false front's tray cannot do. */ problems?: string[] }>();
 const store = useAppStore();
 const L = computed(() => store.sizeLength);
 const design = computed(() => props.design);
@@ -261,11 +261,13 @@ const offDoors = computed(() => (side.value.from === 'own' && side.value.doors !
         <v-row v-if="design.falseFront?.tiltOut" density="compact">
           <v-col cols="4"><LengthField v-model="design.falseFront.tiltOut.depth" label="Tray, deep" /></v-col>
         </v-row>
+        <v-alert v-for="p in problems ?? []" :key="p" type="warning" variant="tonal" density="compact" class="mt-2" data-test="false-front-problem">{{ p }}</v-alert>
         <HelpText>
           <template v-if="design.falseFront?.tiltOut">
             It hangs on a pair of tilt-out hinges and tips forward. A shallow tray is screwed to its back, {{ L(FALSE_FRONT.trayNarrower) }}
-            narrower and {{ L(FALSE_FRONT.trayShorter) }} shorter than the opening, {{ L(FALSE_FRONT.trayDepth.min) }} to
-            {{ L(FALSE_FRONT.trayDepth.max) }} deep (tune me). The hinges are on the hardware list.
+            narrower and {{ L(FALSE_FRONT.trayShorter) }} shorter than the opening but no taller than {{ L(FALSE_FRONT.trayTall) }},
+            {{ L(FALSE_FRONT.trayDepth.min) }} to {{ L(FALSE_FRONT.trayDepth.max) }} deep (tune me): shallower than asked where a sink's
+            bowl or the trap stands close behind it. The hinges are on the hardware list.
           </template>
           <template v-else>
             Fixed: it is screwed from behind, through {{ hasFrame ? "the face frame's stiles" : 'a block screwed to each case side' }}.

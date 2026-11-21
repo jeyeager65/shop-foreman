@@ -108,6 +108,7 @@ import {
   SINK_MOUNTS,
   newSink,
   sinkOfKind,
+  falseFrontProblems,
   FARMHOUSE,
   apronOf,
   farmhouseRow,
@@ -807,6 +808,8 @@ const setFaucetSpread = (value: Length | null) => {
   const faucet = cabinet.value.sink?.faucet;
   if (faucet && value && value.mm > 0) faucet.spread = value;
 };
+/** What a false front's tilt-out tray cannot do: fit at all, or be as deep as asked. */
+const trayProblems = computed(() => (derived.value.error ? [] : falseFrontProblems(store.project!, cabinet.value, store.materials, L.value)));
 /** What is wrong with the sink: no top over it, a bowl wider than the case. */
 const sinkProblemList = computed(() => (cabinet.value.sink ? sinkProblems(store.project!, cabinet.value, store.materials, L.value) : []));
 const WALLS = [
@@ -1530,7 +1533,7 @@ const mayTip = computed(() => (derived.value.error || !store.project ? [] : tipW
 const warnings = computed((): Record<string, number> => ({
   cabinet: partLimits.value.length + existingWrong.value.length,
   openings: shelfTooLong.value.length + mayTip.value.length,
-  fronts: clashes.value.length,
+  fronts: clashes.value.length + trayProblems.value.length,
   inside: !cabinet.value.inside
     ? 0
     : (sinkError.value ? 1 : 0) + wayIn.value.filter((w) => w.how === 'no').length + (underSink.value?.doorRacks?.weight.heavy ? 1 : 0) + (cabinet.value.adjustableShelves > 0 ? 1 : 0),
@@ -2734,7 +2737,7 @@ function notes(part: Part): string[] {
       </template>
       <template v-for="{ opening, drawer } in drawerRows" :key="opening.id">
         <div v-show="nav.currentSub?.id === (drawer?.id ?? `none:${opening.id}`)">
-        <DrawerCards v-if="drawer" :key="drawer.id" shared :design="drawer" :opening="asOpening(opening)" :fixed="opening.fixedOverlay" :inset="opening.inset" :front-only="!!existing" :over-doors="!!opening.overDoors" />
+        <DrawerCards v-if="drawer" :key="drawer.id" shared :design="drawer" :opening="asOpening(opening)" :fixed="opening.fixedOverlay" :inset="opening.inset" :front-only="!!existing" :over-doors="!!opening.overDoors" :problems="trayProblems.filter((p) => p.drawerId === drawer.id).map((p) => p.words)" />
         <template v-else>
           <div class="text-body-2 text-medium-emphasis mb-3">No front on the {{ opening.name.toLowerCase() }} yet.</div>
           <v-btn color="primary" variant="tonal" @click="addDrawer(opening)">Add a drawer front</v-btn>
