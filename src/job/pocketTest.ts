@@ -20,7 +20,7 @@
  * The scrap's own front edge is the edge the screws leave through, so nothing is cut
  * out: the bit is jogged to the scrap's front-left corner as for any job.
  */
-import { pocketArc, pocketChannel, pocketLedge, pocketSlot } from '@/cam/cuts';
+import { pocketArc, pocketChannel, pocketLedge, pocketSlot, screwChannel } from '@/cam/cuts';
 import { Path, runTime } from '@/cam/path';
 import { LOW_POCKET, type LowAngle, POCKET, arcLedge, arcShape, lowCoverFits, pocketShape, slotLedge, slotShape } from '@/geometry/pocketHole';
 import type { Id, Mm, SetupProgram, Shop, Tool, ToolpathStep } from '@/model';
@@ -52,6 +52,11 @@ export interface PocketKind {
   angleDeg?: LowAngle;
   /** A low-angle pocket's seat from the edge, when it is not the usual one. */
   seat?: Mm;
+  /**
+   * The screw's way cut open from the face, a channel as wide as the pilot along the screw from the seat out through
+   * the edge (`screwChannel`), in place of the pilot drilled from the edge with the guide: nothing is drilled.
+   */
+  channel?: boolean;
 }
 
 /** The low-angle pockets side by side: two at each angle. */
@@ -99,6 +104,14 @@ export function lowPocketBit(shop: Pick<Shop, 'tools'>, materialId?: Id): Tool |
     .sort((a, b) => cutDiameter(b) - cutDiameter(a))[0];
 }
 
+/** The flat end mill a screw channel is cut with: the widest no wider than the pilot (two passes of a 1/8" one, for a 4 mm pilot). */
+export function channelBit(shop: Pick<Shop, 'tools'>, materialId?: Id): Tool | undefined {
+  return shop.tools
+    .filter((t) => t.shape.kind === 'endMill' && cutDiameter(t) <= POCKET.drill + 1e-9 && cutDiameter(t) >= 2)
+    .filter((t) => !materialId || t.settings[materialId])
+    .sort((a, b) => cutDiameter(b) - cutDiameter(a))[0];
+}
+
 /** The shop's bits that can cut the test's pockets: its ball noses first (a job's bit), then its flat end mills, smallest first. */
 export function pocketTestBits(shop: Pick<Shop, 'tools'>): Tool[] {
   const ball = shop.tools.filter(isBallNose).filter((t) => cutDiameter(t) < POCKET.bore);
@@ -131,6 +144,8 @@ export function buildPocketTest(shop: Shop, materialId: Id, kinds: PocketKind[] 
   // A 15° pocket's ledge is the flat end mill's; a low-angle pocket's is cut with the bit that cut the pocket.
   const needsFlat = (k: PocketKind) => k.bit === 'flat' || (k.bit === 'ball' && k.ledge);
   if (kinds.some(needsFlat) && !flat) throw new Error(`No flat end mill in the shop profile can cut a pocket or its ledge in ${material.name}: it takes one no wider than half the pocket.`);
+  const narrow = kinds.some((k) => k.channel) ? channelBit(shop, materialId) : undefined;
+  if (kinds.some((k) => k.channel) && !narrow) throw new Error(`No flat end mill in the shop profile can cut a screw's channel in ${material.name}: it takes one no wider than the ${POCKET.drill} mm pilot.`);
   const thickness = material.measuredThickness.mm;
   const feedsOf = (tool: Tool) => {
     const s = toolSettings(tool, materialId);
@@ -212,6 +227,16 @@ export function buildPocketTest(shop: Shop, materialId: Id, kinds: PocketKind[] 
     },
     (count) => (onlyBall ? `${count} pockets` : `${ball!.name.replace(/"/g, ' in')}`),
   );
+  // Last, once each pocket is open: the screw's channel from its seat out through the edge, where it has one.
+  work(
+    narrow,
+    (pocket, path) => {
+      if (!pocket.channel) return false;
+      screwChannel(path, exit(pocket), inward, { thickness, angleDeg: pocket.bit === 'arc' ? (pocket.angleDeg ?? 3) : POCKET.angleDeg, seat: seatOf(pocket) }, cutDiameter(narrow!) / 2, feedsOf(narrow!));
+      return true;
+    },
+    (count) => `${count === 1 ? 'the screw channel' : `${count} screw channels`}, ${narrow!.name.replace(/"/g, ' in')}`,
+  );
 
   const program: SetupProgram = {
     setup: { index: 1, faceUp: 'A', flipBefore: 'none', operationKeys: [], placements: [], pinHoles: [], probeSpot: { at: spot } },
@@ -222,7 +247,7 @@ export function buildPocketTest(shop: Shop, materialId: Id, kinds: PocketKind[] 
     stock: { x: stock.x, y: stock.y, z: thickness },
     toolIds: tools.map((t) => t.id),
     steps,
-    endMessage: 'Pocket-hole test done. Drill each pilot from the edge with the guide.',
+    endMessage: kinds.every((k) => k.channel) ? 'Pocket-hole test done. Nothing to drill: screw them up.' : 'Pocket-hole test done. Drill each pilot from the edge with the guide.',
   };
   return {
     name: POCKET_TEST_FILE,
@@ -231,7 +256,8 @@ export function buildPocketTest(shop: Shop, materialId: Id, kinds: PocketKind[] 
     pockets,
     tools: tools.map((t) => ({ toolId: t.id, name: t.name })),
     seat,
-    depth: Math.max(...pockets.map((p) => (p.bit === 'arc' ? arcOf(p).depth : p.bit === 'flat' ? slot!.depth : round!.depth))),
+    // (A screw channel goes deepest at the edge: half the stock and half the pilot.)
+    depth: Math.max(...pockets.map((p) => Math.max(p.bit === 'arc' ? arcOf(p).depth : p.bit === 'flat' ? slot!.depth : round!.depth, p.channel ? thickness / 2 + POCKET.drill / 2 : 0))),
     stock: { x: stock.x, y: stock.y },
     // How far the bit stands out follows the seat (the first pocket's, when the kinds are mixed).
     bitOutOfChuck: POCKET.guideOutside + seat + POCKET.through,
