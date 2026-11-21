@@ -12,7 +12,9 @@ import { useAppStore } from '@/stores/app';
 
 const props = defineProps<{ section: PocketSection; title: string }>();
 const store = useAppStore();
-const L = computed(() => store.sizeLength);
+/** Its lengths in the shop's CNC and tooling unit, as the rest of the page; the screw as it is bought, in the sizes unit. */
+const L = computed(() => store.cncLength);
+const screwName = computed(() => store.sizeLength);
 
 const s = computed(() => props.section);
 const a = computed(() => (s.value.angleDeg * Math.PI) / 180);
@@ -55,8 +57,9 @@ const screwTransform = computed(() => `translate(0 ${(t.value / 2).toFixed(2)}) 
       <!-- The other part, standing against the edge, and the board the pocket is cut in. -->
       <rect :x="-t" :y="-8" :width="t" :height="t + 16" class="other" />
       <rect x="0" y="0" :width="reach - 2" :height="t" class="board" />
-      <polygon :points="points(s.pocket)" class="cut" />
-      <polygon v-if="s.channel" :points="channel" class="cut" />
+      <!-- The pocket and the channel are slots down the middle: drawn lighter, the wood either side of them still there. -->
+      <polygon :points="points(s.pocket)" class="slot" />
+      <polygon v-if="s.channel" :points="channel" class="slot" />
       <g :transform="screwTransform">
         <!-- A drilled pilot, from the edge to the seat. -->
         <template v-if="!s.channel">
@@ -78,7 +81,7 @@ const screwTransform = computed(() => `translate(0 ${(t.value / 2).toFixed(2)}) 
     </svg>
     <figcaption class="text-caption">
       <div class="font-weight-medium">{{ title }}</div>
-      <div class="text-medium-emphasis">Seat {{ L(s.seat) }} from the edge, a {{ L(s.screw) }} {{ s.screwKind === 'castle' ? 'low-angle (Castle) #7 screw, coarse thread' : `#8 pocket screw, ${s.fine ? 'fine' : 'coarse'} thread` }}.</div>
+      <div class="text-medium-emphasis">Seat {{ L(s.seat) }} from the edge, a {{ screwName(s.screw) }} {{ s.screwKind === 'castle' ? 'low-angle (Castle) #7 screw, coarse thread' : `#8 pocket screw, ${s.fine ? 'fine' : 'coarse'} thread` }}.</div>
       <div :class="s.short || s.through ? 'text-warning' : 'text-medium-emphasis'">
         {{ L(s.into) }} into the other part<template v-if="s.short">: too little to hold</template><template v-else-if="s.through">: it comes out of the far face</template>.
       </div>
@@ -104,8 +107,11 @@ const screwTransform = computed(() => `translate(0 ${(t.value / 2).toFixed(2)}) 
 .other {
   fill: #a8875c;
 }
-.cut {
-  fill: #2a2e37;
+.slot {
+  fill: #5c4c38;
+  stroke: #e7e2d6;
+  stroke-width: 0.25;
+  stroke-dasharray: 1 0.8;
 }
 .pilot {
   stroke: #e7e2d6;

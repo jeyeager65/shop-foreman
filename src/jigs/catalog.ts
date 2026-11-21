@@ -6,6 +6,7 @@
  * lists them (`#/jigs`) needs no project.
  */
 import { materialTitle, shopFor } from '@/design';
+import { DEFAULT_UNIT_PREFERENCES, formatLength } from '@/units';
 import { DEFAULT_DOOR_HANDLE } from '@/design/handles';
 import { handleHeight, handleLook, printedHandleProblems, pullProfile } from '@/design/printedHandle';
 import { GUIDE_STOCK, LOW_POCKET, POCKET, POCKET_SLEEVE, SLEEVE_LIMITS, arcShape, lowPocketScrew, sleeveGoesIn, sleeveWords } from '@/geometry/pocketHole';
@@ -215,7 +216,14 @@ export function jigItems(shop: ShopProfile): JigItem[] {
   });
 
   const one = (template: 'supportBlock' | 'gapShim', params: Record<string, Mm>) => ({ template, params, quantity: 1, output: '3mf' as const });
-  const ballNoseStock = shop.materialCatalog.map((m) => ({ title: `${materialTitle(m)}, ${+m.measuredThickness.mm.toFixed(2)} mm thick`, value: m.id }));
+  /**
+   * The scrap test's lengths, all in the shop's CNC and tooling unit (mm to start): a seat, a depth, the scrap. What is bought
+   * goes by the shop's sizes unit (a screw), and a bit or a material keeps its own name.
+   */
+  const cnc = (mm: Mm) => formatLength(mm, { ...DEFAULT_UNIT_PREFERENCES, ...shop.units }.cnc);
+  /** A screw's length as it is bought: in the shop's sizes unit (1-1/2" in a shop in inches, 38.1 mm in one in mm). */
+  const screwName = (mm: Mm) => formatLength(mm, { ...DEFAULT_UNIT_PREFERENCES, ...shop.units }.sizes);
+  const ballNoseStock = shop.materialCatalog.map((m) => ({ title: `${materialTitle(m)}, ${cnc(m.measuredThickness.mm)} thick`, value: m.id }));
   const shimFields: JigField[] = [
     { key: 'thickness', label: 'Thickness', kind: 'mm' },
     { key: 'length', label: 'Length', kind: 'mm' },
@@ -231,7 +239,7 @@ export function jigItems(shop: ShopProfile): JigItem[] {
   const seatOf = (values: JigValues): Mm => (Number(values.seat) > 0 ? Number(values.seat) : LOW_POCKET.seat);
   /** The seat distances a low-angle pocket may be tried at, as on a pocket-hole machine: across its range, the usual one among them. */
   const SEATS = [12, 14, 16, 18, 20, LOW_POCKET.seat, 25, 28, 32, 36, 40, LOW_POCKET.seatRange.max].filter((s) => s >= LOW_POCKET.seatRange.min && s <= LOW_POCKET.seatRange.max);
-  const seatTitle = (s: Mm) => `${+s.toFixed(1)} mm${Math.abs(s - LOW_POCKET.seat) < 0.01 ? ' (the usual)' : ''}`;
+  const seatTitle = (s: Mm) => `${cnc(s)}${Math.abs(s - LOW_POCKET.seat) < 0.01 ? ' (the usual)' : ''}`;
   /** The bits a scrap is cut with, one a scrap: a ball nose cuts 15° pockets; a narrow end mill 15° or low-angle ones; one wider than half the bore, low-angle ones. */
   const scrapBits = [...testBits, ...(lowBit && !testBits.some((t) => t.id === lowBit.id) ? [lowBit] : [])];
   const bitKindOf = (id: unknown): 'ball' | 'narrow' | 'wide' => {
@@ -293,7 +301,7 @@ export function jigItems(shop: ShopProfile): JigItem[] {
       row: 'Pocket',
       max: POCKET_TEST.most,
       columns: POCKET_COLUMNS,
-      hint: `Left to right along the scrap's front edge; two alike make a joint that does not turn. A channel: the screw lies in a slot ${POCKET.drill} mm wide cut from the face out through the edge, nothing to drill. A low-angle pocket's seat is set as on a pocket-hole machine: a screw goes its length less the seat into the other part.`,
+      hint: `Left to right along the scrap's front edge; two alike make a joint that does not turn. A channel: the screw lies in a slot ${cnc(POCKET.drill)} wide cut from the face out through the edge, nothing to drill. A low-angle pocket's seat is set as on a pocket-hole machine: a screw goes its length less the seat into the other part.`,
     },
   ];
   /** The pockets the page's rows come to, all with the bit chosen. */
@@ -324,12 +332,12 @@ export function jigItems(shop: ShopProfile): JigItem[] {
   const TEST_START = JSON.stringify(Array.from({ length: POCKET_TEST.count }, () => ({ angle: String(POCKET.angleDeg), seat: String(LOW_POCKET.seat), ledge: 'no', ledgeLow: 'no', way: 'drilled' })));  /** The screw for a low-angle pocket in stock this thick, where it is known. */
   const screwWords = (thickness: Mm, seat: Mm): string => {
     const screw = lowPocketScrew(thickness);
-    return screw ? `. In this stock it takes ${screw > 35 ? '1 1/2"' : '1 1/4"'} screws: with the seat ${seat.toFixed(1)} mm from the edge, one goes ${(screw - seat).toFixed(1)} mm into the other part` : '';
+    return screw ? `. In this stock it takes ${screwName(screw)} screws: with the seat ${cnc(seat)} from the edge, one goes ${cnc(screw - seat)} into the other part` : '';
   };
   const kindWords = (kind: PocketKind, thickness: Mm, bitWidth: Mm = lowBitWidth): string => {
     if (kind.bit !== 'arc') return plainKindWords(kind);
     const arc = arcShape(thickness, bitWidth, kind.angleDeg ?? 3, kind.seat);
-    return `Low angle, ${arc.angleDeg}°: a slot ${arc.depth.toFixed(1)} mm deep at the seat, its floor up to the face in an arc ${Math.round(arc.end)} mm in from the edge. The driver comes in about ${Math.round(arc.driverOff)}° steeper than the screw lies, so it wants a head that takes that (Torx, or a square drive)${screwWords(thickness, arc.seat)}${kind.ledge ? '; with a ledge round its opening for a printed cover, cut with the same bit' : ''}`;
+    return `Low angle, ${arc.angleDeg}°: a slot ${cnc(arc.depth)} deep at the seat, its floor up to the face in an arc ${cnc(arc.end)} in from the edge. The driver comes in about ${Math.round(arc.driverOff)}° steeper than the screw lies, so it wants a head that takes that (Torx, or a square drive)${screwWords(thickness, arc.seat)}${kind.ledge ? '; with a ledge round its opening for a printed cover, cut with the same bit' : ''}`;
   };
   const plainKindWords = (kind: PocketKind) =>
     (kind.bit === 'ball'
@@ -430,7 +438,7 @@ export function jigItems(shop: ShopProfile): JigItem[] {
       name: 'Pocket-hole scrap test',
       group: 'Jigs',
       made: 'cnc',
-      about: `Pockets along the front edge of a piece of scrap ${POCKET_TEST.stock.y} mm deep (${testSize().x} mm long for two, ${POCKET_TEST.spacing} mm more for each more), cut with one bit, to screw to another piece: as many as you want to try, each its own kind, up to ${POCKET_TEST.most}. At 15° (as a job cuts them), or low angle as a routed pocket-hole machine cuts them, the screw at 3° or 6° and the seat where you set it; each with a ledge for a printed cover or without, its pilot drilled with the guide or its screw's way cut open from the face.`,
+      about: `Pockets along the front edge of a piece of scrap ${cnc(POCKET_TEST.stock.y)} deep (${cnc(testSize().x)} long for two, ${cnc(POCKET_TEST.spacing)} more for each more), cut with one bit, to screw to another piece: as many as you want to try, each its own kind, up to ${POCKET_TEST.most}. At 15° (as a job cuts them), or low angle as a routed pocket-hole machine cuts them, the screw at 3° or 6° and the seat where you set it; each with a ledge for a printed cover or without, its pilot drilled with the guide or its screw's way cut open from the face.`,
       untested: true,
       single: true,
       fields: testFields,
@@ -468,7 +476,7 @@ export function jigItems(shop: ShopProfile): JigItem[] {
             try {
               const test = buildPocketTest(shopFor({ materials: shop.materialCatalog }, shop), String(values.materialId), kinds, String(values.bit));
               const chosen = scrapBits.find((t) => t.id === values.bit);
-              return test.pockets.map((p, i) => `Pocket ${i + 1}. ${kindWords(p, test.thickness, chosen && !isBallNose(chosen) ? cutDiameter(chosen) : lowBitWidth)}${p.channel ? `; its screw's way a channel ${POCKET.drill} mm wide cut open from the face, nothing to drill` : ''}. About ${Math.round(p.seconds)} s.`);
+              return test.pockets.map((p, i) => `Pocket ${i + 1}. ${kindWords(p, test.thickness, chosen && !isBallNose(chosen) ? cutDiameter(chosen) : lowBitWidth)}${p.channel ? `; its screw's way a channel ${cnc(POCKET.drill)} wide cut open from the face, nothing to drill` : ''}. About ${Math.round(p.seconds)} s.`);
             } catch {
               return [];
             }
@@ -487,8 +495,8 @@ export function jigItems(shop: ShopProfile): JigItem[] {
       gcode: (values, _quantity, machineId) => {
         const kinds = testKinds(values);
         const test = buildPocketTest(shopFor({ materials: shop.materialCatalog, machineId }, shop), String(values.materialId), kinds, String(values.bit));
-        const drill = kinds.some((k) => !k.channel) ? `; the pilot bit ${test.bitOutOfChuck.toFixed(1)} mm out of the chuck` : '; nothing to drill';
-        return [{ name: POCKET_TEST_FILE, text: test.text, note: `scrap at least ${test.stock.x} × ${test.stock.y} mm; ${test.pockets.length} pockets; cut with ${test.tools.map((t) => t.name).join(' then ')}${drill}` }];
+        const drill = kinds.some((k) => !k.channel) ? `; the pilot bit ${cnc(test.bitOutOfChuck)} out of the chuck` : '; nothing to drill';
+        return [{ name: POCKET_TEST_FILE, text: test.text, note: `scrap at least ${cnc(test.stock.x)} × ${cnc(test.stock.y)}; ${test.pockets.length} pockets; cut with ${test.tools.map((t) => t.name).join(' then ')}${drill}` }];
       },      fileName: POCKET_TEST_FILE,
     },
     {

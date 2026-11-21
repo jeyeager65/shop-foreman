@@ -196,7 +196,7 @@ describe('the scrap test with low-angle pockets', () => {
     expect(files[0]!.text).toContain('2 low-angle pockets');
     expect(test.notes!(values).join(' ')).toMatch(/Low angle, 3°: a slot .* The driver comes in about \d+° steeper/);
     expect(test.notes!(values).join(' ')).toContain('A low-angle pocket takes its own guide');
-    expect(test.notes!(values).join(' ')).toContain('In this stock it takes 1 1/2" screws');
+    expect(test.notes!(values).join(' ')).toContain('In this stock it takes 1-1/2" screws');
     const guide = items.find((i) => i.id === 'pocket-guide')!;
     expect(guide.fields.find((f) => f.key === 'angle')!.choices!.map((c) => c.value)).toEqual(['15', '3', '6']);
     expect(guide.inUse!({ ...guide.defaults, angle: '6' }).low).toEqual({ angleDeg: 6, bit: QUARTER });

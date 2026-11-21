@@ -316,6 +316,9 @@ const madeWords = (i: JigItem) => (i.made === 'print' ? '3D print' : 'Cut on the
             <div v-if="sections.length" class="sections mt-3" data-test="jig-sections">
               <PocketSectionView v-for="sec in sections" :key="sec.title" :title="sec.title" :section="sec.section" />
             </div>
+            <div v-if="sections.length" class="text-caption text-medium-emphasis mt-2">
+              Each drawn cut along its screw. The pocket and a channel are slots down the middle (drawn darker, dashed): the wood either side of them is still there.
+            </div>
             <div class="text-caption text-medium-emphasis mt-2">
               The scrap as the file cuts it: the G-code below, carved with its bit. Drag to turn, scroll to zoom; the slider steps through the cut.
             </div>
