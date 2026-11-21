@@ -178,3 +178,17 @@ describe('a sink with its faucet holes in the top', () => {
     expect(Math.min(...c.holes.flat().map((p) => p[1])) - c.piece.zBack).toBeGreaterThanOrEqual(len('1"').mm - 0.5);
   });
 });
+
+describe('a top with a sink opening, drawn', () => {
+  it('keeps its solid round a round opening, however its outline runs', async () => {
+    const { buildPartMeshes } = await import('@/geometry/solids');
+    const project = withSink({ mount: 'integrated' }, false);
+    const shapes = sinkShapes(project, project.materials, shop.hardware);
+    const meshes = await buildPartMeshes(shapes);
+    for (const m of meshes) expect(m.mesh.positions.length, m.partId).toBeGreaterThan(0);
+    const undermount = withSink({ mount: 'undermount', shape: 'oval' });
+    const panel = buildJob(undermount, shop).cabinetParts.find((p) => p.name === 'Countertop')!;
+    const [made] = await buildPartMeshes([panel]);
+    expect(made!.mesh.positions.length).toBeGreaterThan(24);
+  });
+});

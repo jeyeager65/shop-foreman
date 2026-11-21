@@ -265,7 +265,16 @@ export function buildPartSolid(wasm: Wasm, part: Part): Solid {
         y1: whole.y1 > part.size.height - 1e-6 ? whole.y1 + over : whole.y1,
       };
       if (r) cutters.push(Manifold.hull([...ring(r, -over), ...ring(r, t + over)]));
-      else cutters.push(Manifold.extrude([f.outline.map((p): [number, number] => [p.x, p.y])], t + 2 * over).translate([0, 0, -over]));
+      else {
+        // Counter-clockwise, as an extrusion's outline must be: a clockwise one (a sink's, laid out from the front edge
+        // back) would be read as a hole, and the part left with nothing.
+        const loop = f.outline.map((p): [number, number] => [p.x, p.y]);
+        const area = loop.reduce((sum, [x, y], i) => {
+          const [nx, ny] = loop[(i + 1) % loop.length]!;
+          return sum + x * ny - nx * y;
+        }, 0);
+        cutters.push(Manifold.extrude([area < 0 ? loop.reverse() : loop], t + 2 * over).translate([0, 0, -over]));
+      }
     }
   }
 

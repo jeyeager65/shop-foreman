@@ -1011,7 +1011,7 @@ function show(response: SolidResponse, { parts, cabinets, room }: Shown) {
       const as = !appliance && tint === undefined && source && !source.existing ? props.looks?.[source.materialId] : undefined;
       const wood = as ? typed(bare, as) : appliance || source?.grain ? bare : withoutGrain(bare);
       // Each face as it is finished: a side painted outside and bare inside, a back bare against the wall.
-      const faces = appliance || source?.existing ? undefined : props.faces?.[part.partId];
+      const faces = appliance || tint !== undefined || source?.existing ? undefined : props.faces?.[part.partId];
       const finishOf = (face: FaceFinish | undefined): Finish | undefined => (face === undefined || face === 'shown' ? finish : face === 'case' ? drawnFinish.value?.case : undefined);
       const dressed = (face: FaceFinish | undefined) => (face === 'clear' && showFinish.value ? cleared(wood) : finished(wood, finishOf(face)));
       const rim = dressed(faces?.edges);

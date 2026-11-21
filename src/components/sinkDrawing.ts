@@ -70,10 +70,9 @@ export function sinkObject(look: SinkLook, materials: SinkMaterials): THREE.Grou
     group.add(drain);
     // A vessel's rim: a lip round its opening, so the bowl reads as having a wall.
     if (look.vessel) {
-      const lip = new THREE.Mesh(new THREE.TorusGeometry(1, 4, 8, 64), body);
-      lip.scale.set(b.width / 2, b.depth / 2, 1);
-      lip.position.set(b.cx, b.cy, b.top);
-      group.add(lip);
+      // A thin round tube along its opening's edge.
+      const curve = new THREE.CatmullRomCurve3(loopAt(opening, b.cx, b.cy, b.top), true);
+      group.add(new THREE.Mesh(new THREE.TubeGeometry(curve, opening.length * 2, 4, 8, true), body));
     }
   }
   // A drop-in's rim: on the top, round its bowls (each bowl's opening a hole in it).
