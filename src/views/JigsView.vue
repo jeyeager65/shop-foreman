@@ -210,7 +210,7 @@ const notes = computed(() => (item.value?.notes && !problems.value.length ? item
 /** A test cut in scrap has no solid: its picture is its own G-code, carved out of the scrap. */
 const carved = computed(() => (item.value?.carved ? gcode.value.files[0]?.text : undefined));
 /** Or, where it has one, the scrap once its pilots are drilled by hand, cut away through each pocket: built when shown. */
-const scrapView = ref<'cut' | 'drilled'>('cut');
+const scrapView = ref<'cut' | 'drilled' | 'screwed'>('cut');
 const drilledSolids = shallowRef<PrintObject[]>([]);
 const drilledError = ref('');
 let drilledRun = 0;
@@ -218,10 +218,11 @@ watch(
   [item, values, scrapView],
   async () => {
     const i = item.value;
-    if (!i?.drilled || scrapView.value !== 'drilled' || problems.value.length) return void (drilledSolids.value = []);
+    const view = scrapView.value;
+    if (!i?.drilled || view === 'cut' || problems.value.length) return void (drilledSolids.value = []);
     const run = ++drilledRun;
     try {
-      const objects = await i.drilled(JSON.parse(JSON.stringify(values.value)) as JigValues, wasmUrl);
+      const objects = await i.drilled(JSON.parse(JSON.stringify(values.value)) as JigValues, wasmUrl, view);
       if (run !== drilledRun) return;
       drilledSolids.value = objects;
       drilledError.value = '';
@@ -411,8 +412,9 @@ const madeWords = (i: JigItem) => (i.made === 'print' ? '3D print' : 'Cut on the
             <v-btn-toggle v-if="item.drilled" v-model="scrapView" mandatory density="compact" variant="outlined" divided class="mb-3" data-test="jig-scrap-view">
               <v-btn value="cut" size="small">As cut</v-btn>
               <v-btn value="drilled" size="small">As drilled</v-btn>
+              <v-btn value="screwed" size="small">Screwed</v-btn>
             </v-btn-toggle>
-            <template v-if="scrapView === 'drilled' && item.drilled">
+            <template v-if="scrapView !== 'cut' && item.drilled">
               <MeshView v-if="drilledSolids.length" :objects="drilledSolids" data-test="jig-drilled" />
               <div v-else class="text-body-2 text-medium-emphasis">{{ drilledError || 'Building…' }}</div>
             </template>
@@ -422,7 +424,8 @@ const madeWords = (i: JigItem) => (i.made === 'print' ? '3D print' : 'Cut on the
               <PocketSectionView v-for="sec in sections" :key="sec.title" :title="sec.title" :section="sec.section" />
             </div>
             <div class="text-caption text-medium-emphasis mt-2">
-              <template v-if="scrapView === 'drilled' && item.drilled">The scrap seen through, with the pilots drilled from the edge with the guide in blue (a slot is cut by the CNC instead, and has none). Drawn from the pockets' sizes. Drag to turn, scroll to zoom.</template>
+              <template v-if="scrapView === 'screwed' && item.drilled">The scrap screwed to another board standing against its edge, both seen through: each pocket's screw with its head on the seat. Drag to turn, scroll to zoom.</template>
+              <template v-else-if="scrapView === 'drilled' && item.drilled">The scrap seen through, with the pilots drilled from the edge with the guide in blue (a slot is cut by the CNC instead, and has none). Drawn from the pockets' sizes. Drag to turn, scroll to zoom.</template>
               <template v-else>The scrap as the file cuts it: the G-code below, carved with its bit. Drag to turn, scroll to zoom; the slider steps through the cut.</template>
             </div>
           </template>

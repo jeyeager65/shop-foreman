@@ -19,7 +19,7 @@ import { type DowelJig, type HingeCupJig, type PullTemplate, type ShelfPinJig, b
 import { buildInstallKitObjects } from './installKit';
 import { type PocketCover, buildPocketCover, coverSize, pocketCoverProblems } from './pocketCover';
 import { POCKET_SCREW, type PocketSection, bothUnits, farthestSeat, pocketSection } from './pocketSection';
-import { buildDrilledScrap, testLedge } from './drilledScrap';
+import { type ScrapView, buildDrilledScrap, testLedge } from './drilledScrap';
 import { type PocketGuide, buildPocketGuide, guideBitOut, guideStockName, pocketGuideProblems } from './pocketGuide';
 import { buildPrintedHandle } from './printedHandles';
 import { buildSlideJigObjects, slideJigProblems } from './slideJig';
@@ -96,7 +96,7 @@ export interface JigItem {
   /** A thing with no solid of its own (a test cut in scrap): the page's picture is its G-code, carved. */
   carved?: boolean;
   /** A test cut's second picture: the scrap once what is drilled by hand is drilled, cut away to show it. */
-  drilled?(values: JigValues, wasmUrl?: string): Promise<PrintObject[]>;
+  drilled?(values: JigValues, wasmUrl?: string, view?: ScrapView): Promise<PrintObject[]>;
   /** More to say about it for these values, under its sizes: what the numbers come to. */
   notes?(values: JigValues): string[];
   /** What is kept under the page's "How this works": explanations that need not be in sight. */
@@ -479,7 +479,7 @@ export function jigItems(shop: ShopProfile): JigItem[] {
       build: async () => [],
       carved: true,
       // Each pocket where the file puts it, drawn from its section, with its pilot drilled or its channel cut.
-      drilled: async (values, wasmUrl) => {
+      drilled: async (values, wasmUrl, view) => {
         const kinds = testKinds(values);
         const tool = scrapBits.find((t) => t.id === values.bit);
         const width = tool ? cutDiameter(tool) : lowBitWidth;
@@ -497,6 +497,7 @@ export function jigItems(shop: ShopProfile): JigItem[] {
             return { x: p.x, section, ...(k.ledge ? { ledge: testLedge(section, ledgeWidth, k.seat) } : {}) };
           }),
           wasmUrl,
+          view,
         );
       },
       // In sight: how long it takes, and only what needs doing (another bit, a guide to print).
