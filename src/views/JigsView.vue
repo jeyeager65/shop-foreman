@@ -16,6 +16,7 @@ import MeshView from '@/components/MeshView.vue';
 import StockCarveView from '@/components/StockCarveView.vue';
 import MmField from '@/components/MmField.vue';
 import PocketGuideInUse from '@/components/PocketGuideInUse.vue';
+import PocketSectionView from '@/components/PocketSectionView.vue';
 import PanelTitle from '@/components/PanelTitle.vue';
 import { type JigField, type JigFile, type JigItem, type JigValues, handleWith, jigItems, jigRows, withCopies } from '@/jigs/catalog';
 import type { PrintObject } from '@/jigs/threemf';
@@ -71,6 +72,14 @@ const state = computed<Kept | undefined>(() => {
   return kept[i.id];
 });
 const values = computed<JigValues>(() => ({ ...item.value?.defaults, ...state.value?.values }));
+/** The scrap test's pockets in section, each kind once. */
+const sections = computed(() => {
+  try {
+    return item.value?.sections?.(values.value) ?? [];
+  } catch {
+    return [];
+  }
+});
 /** A list field's rows, and its edits: each kept as the list's JSON. */
 const rowsOf = (f: JigField) => jigRows(values.value, f.key);
 const setRows = (f: JigField, rows: Record<string, string>[]) => set(f.key, JSON.stringify(rows));
@@ -303,6 +312,10 @@ const madeWords = (i: JigItem) => (i.made === 'print' ? '3D print' : 'Cut on the
           <MeshView v-if="solids.length" :objects="solids" />
           <template v-else-if="carved">
             <StockCarveView :gcode="carved" data-test="jig-carved" />
+            <!-- The pockets in section, through each screw: what the angle and the seat do. -->
+            <div v-if="sections.length" class="sections mt-3" data-test="jig-sections">
+              <PocketSectionView v-for="sec in sections" :key="sec.title" :title="sec.title" :section="sec.section" />
+            </div>
             <div class="text-caption text-medium-emphasis mt-2">
               The scrap as the file cuts it: the G-code below, carved with its bit. Drag to turn, scroll to zoom; the slider steps through the cut.
             </div>
@@ -393,6 +406,12 @@ const madeWords = (i: JigItem) => (i.made === 'print' ? '3D print' : 'Cut on the
 .jig-card {
   height: 100%;
   cursor: pointer;
+}
+/* The pockets in section, side by side, as many as fit. */
+.sections {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
 }
 /* A list field's row: its name, then its choices side by side, wrapping on a narrow screen. */
 .jig-row {

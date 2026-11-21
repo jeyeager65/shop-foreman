@@ -1,0 +1,47 @@
+// @vitest-environment node
+import { describe, expect, it } from 'vitest';
+import { LOW_POCKET, POCKET } from '@/geometry/pocketHole';
+import { jigItems } from '@/jigs/catalog';
+import { POCKET_SCREW, farthestSeat, pocketSection } from '@/jigs/pocketSection';
+import { createStarterShopProfile } from '@/libraries';
+import { MM_PER_INCH } from '@/units';
+
+/** A pocket hole in section: the screw leaves the edge at mid-thickness, and the seat says how much of it goes into the other part. */
+describe('a pocket in section', () => {
+  const t = 18.26;
+
+  it('has a low-angle pocket\'s Castle screw, coarse, 1-1/2" in 3/4" stock, and moves with its seat', () => {
+    const near = pocketSection(t, 3, 12, 3.175, false);
+    const far = pocketSection(t, 3, LOW_POCKET.seat, 3.175, false);
+    expect(near).toMatchObject({ screwKind: 'castle', fine: false });
+    expect(near.screw).toBeCloseTo(1.5 * MM_PER_INCH, 6);
+    expect(near.into - far.into).toBeCloseTo(LOW_POCKET.seat - 12, 6);
+    // The pocket starts further in with the seat further in.
+    expect(Math.min(...far.pocket.map((p) => p[0]))).toBeGreaterThan(Math.min(...near.pocket.map((p) => p[0])) + 9);
+    expect(far.short).toBe(false);
+  });
+
+  it('has a 15° pocket\'s screw, fine thread in hardwood, 1-1/4" in 3/4" stock', () => {
+    const s = pocketSection(t, POCKET.angleDeg, undefined, 3.175, true, true);
+    expect(s).toMatchObject({ screwKind: 'kreg', fine: true, channel: true });
+    expect(s.screw).toBeCloseTo(1.25 * MM_PER_INCH, 6);
+    expect(s.seat).toBeCloseTo(POCKET.seatShare * t, 6);
+  });
+
+  it('says when too little of the screw is in the other part', () => {
+    expect(pocketSection(t, 3, 30, 3.175, false).short).toBe(true);
+  });
+
+  it('only offers seats that leave 5/8" of screw in the other part', () => {
+    expect(farthestSeat(t)).toBeCloseTo(1.5 * MM_PER_INCH - POCKET_SCREW.leastInto, 6);
+    const profile = createStarterShopProfile();
+    const test = jigItems(profile).find((i) => i.id === 'pocket-test')!;
+    const seats = test.fields.find((f) => f.key === 'pockets')!.columns!.find((c) => c.key === 'seat')!;
+    const offered = seats.choicesFor!(test.defaults).map((c) => Number(c.value));
+    expect(Math.max(...offered)).toBeLessThanOrEqual(farthestSeat(t) + 0.01);
+    expect(offered).toContain(LOW_POCKET.seat);
+    // And the page draws each kind once.
+    const values = { ...test.defaults, bit: 'endmill-1-8', pockets: JSON.stringify([{ angle: '3' }, { angle: '15' }, { angle: '15' }]) };
+    expect(test.sections!(values).map((s) => s.title)).toEqual(['Pocket 1', 'Pockets 2 and 3']);
+  });
+});

@@ -190,7 +190,7 @@ describe('the scrap test with low-angle pockets', () => {
     expect(angle.choicesFor!({ ...test.defaults, bit: 'endmill-1-4' }).map((c) => c.value)).toEqual(['3', '6']);
     expect(angle.choicesFor!({ ...test.defaults, bit: 'endmill-1-8' }).map((c) => c.value)).toEqual(['15', '3', '6']);
     const seats = test.fields.find((f) => f.key === 'pockets')!.columns!.find((c) => c.key === 'seat')!;
-    expect(seats.choices.length).toBeGreaterThan(3);
+    expect(seats.choicesFor!({ ...test.defaults, bit: 'endmill-1-4' }).length).toBeGreaterThan(3);
     const values = { ...test.defaults, bit: 'endmill-1-4', pockets: JSON.stringify([{ angle: '3' }, { angle: '3' }]) };
     const files = test.gcode!(values, 1, profile.activeMachineId);
     expect(files[0]!.text).toContain('2 low-angle pockets');

@@ -17,6 +17,7 @@ import { INSERT_PLAY, INSERT_UNDER, type Caddy, type Dividers, type KnifeInsert,
 import { type DowelJig, type HingeCupJig, type PullTemplate, type ShelfPinJig, buildDowelJig, buildHingeCupJig, buildPullTemplate, buildShelfPinJig, dowelJigProblems, hingeCupJigProblems, pullTemplateProblems, shelfPinJigProblems } from './drillJigs';
 import { buildInstallKitObjects } from './installKit';
 import { type PocketCover, buildPocketCover, coverSize, pocketCoverProblems } from './pocketCover';
+import { type PocketSection, farthestSeat, pocketSection } from './pocketSection';
 import { type PocketGuide, buildPocketGuide, guideBitOut, guideStockName, pocketGuideProblems } from './pocketGuide';
 import { buildPrintedHandle } from './printedHandles';
 import { buildSlideJigObjects, slideJigProblems } from './slideJig';
@@ -92,6 +93,8 @@ export interface JigItem {
   carved?: boolean;
   /** More to say about it for these values, under its sizes: what the numbers come to. */
   notes?(values: JigValues): string[];
+  /** The scrap test's pockets in section, each kind once, with the pockets it stands for. */
+  sections?(values: JigValues): { title: string; section: PocketSection }[];
   /** The pocket-hole guide: what the page's moving picture of it in use is drawn from. */
   inUse?(values: JigValues): PocketGuide;
   /** A handle of the shop's library: "Save to the shop profile" writes the values back to it. */
@@ -227,7 +230,7 @@ export function jigItems(shop: ShopProfile): JigItem[] {
   const seatField: JigField = { key: 'seat', label: 'Seat from the edge', kind: 'mm', hint: `Along the screw, from the edge to where its head bears: ${LOW_POCKET.seatRange.min} to ${LOW_POCKET.seatRange.max} mm. A screw goes its length less this into the other part.` };
   const seatOf = (values: JigValues): Mm => (Number(values.seat) > 0 ? Number(values.seat) : LOW_POCKET.seat);
   /** The seat distances a low-angle pocket may be tried at, as on a pocket-hole machine: across its range, the usual one among them. */
-  const SEATS = [12, 15, 18, LOW_POCKET.seat, 25, 28, 32, 36, 40, LOW_POCKET.seatRange.max].filter((s) => s >= LOW_POCKET.seatRange.min && s <= LOW_POCKET.seatRange.max);
+  const SEATS = [12, 14, 16, 18, 20, LOW_POCKET.seat, 25, 28, 32, 36, 40, LOW_POCKET.seatRange.max].filter((s) => s >= LOW_POCKET.seatRange.min && s <= LOW_POCKET.seatRange.max);
   const seatTitle = (s: Mm) => `${+s.toFixed(1)} mm${Math.abs(s - LOW_POCKET.seat) < 0.01 ? ' (the usual)' : ''}`;
   /** The bits a scrap is cut with, one a scrap: a ball nose cuts 15° pockets; a narrow end mill 15° or low-angle ones; one wider than half the bore, low-angle ones. */
   const scrapBits = [...testBits, ...(lowBit && !testBits.some((t) => t.id === lowBit.id) ? [lowBit] : [])];
@@ -241,6 +244,8 @@ export function jigItems(shop: ShopProfile): JigItem[] {
   const angleOf = (row: Record<string, string>, values: JigValues): number => anglesFor(values).find((a) => String(a) === row.angle) ?? anglesFor(values)[0]!;
   const lowRow = (row: Record<string, string>, values: JigValues) => angleOf(row, values) !== POCKET.angleDeg;
   const bitChoices = scrapBits.map((t) => ({ title: t.name, value: t.id }));
+  /** The scrap's thickness, measured: its material's. */
+  const scrapThickness = (values: JigValues): Mm => shop.materialCatalog.find((m) => m.id === values.materialId)?.measuredThickness.mm ?? 19.05;
   /** The end mills a 15° pocket's ledge may be cut with: any no wider than the bore (the 1/8" or the 1/4" in the starter shop). */
   const ledgeBits = shop.tools.filter((t) => t.shape.kind === 'endMill' && cutDiameter(t) >= 3 - 1e-6 && cutDiameter(t) <= POCKET.bore + 1e-6).sort((a, b) => cutDiameter(a) - cutDiameter(b));
   /** The pockets on the scrap, all cut with the one bit: each a row of its own. */
@@ -252,7 +257,14 @@ export function jigItems(shop: ShopProfile): JigItem[] {
       choicesFor: (values) => anglesFor(values).map((a) => ({ title: a === POCKET.angleDeg ? `${a}°` : `${a}°, low angle`, value: String(a) })),
       when: (_row, values) => anglesFor(values).length > 1,
     },
-    { key: 'seat', label: 'Seat from the edge', choices: SEATS.map((s) => ({ title: seatTitle(s), value: String(s) })), when: lowRow },
+    // Only seats that leave the screw enough of itself in the other part, in the scrap's thickness.
+    {
+      key: 'seat',
+      label: 'Seat from the edge',
+      choices: [],
+      choicesFor: (values) => SEATS.filter((s) => s <= farthestSeat(scrapThickness(values)) + 0.01).map((s) => ({ title: seatTitle(s), value: String(s) })),
+      when: lowRow,
+    },
     // A 15° pocket's ledge with an end mill of its own (the cover's corners follow the bit); a low-angle one's with the pocket's bit.
     // A ledge is cut with the scrap's own end mill; round a ball nose's pocket, which cannot cut a flat one, with an end mill chosen here.
     {
@@ -422,6 +434,23 @@ export function jigItems(shop: ShopProfile): JigItem[] {
       untested: true,
       single: true,
       fields: testFields,
+      sections: (values) => {
+        const kinds = testKinds(values);
+        const tool = scrapBits.find((t) => t.id === values.bit);
+        const width = tool ? cutDiameter(tool) : lowBitWidth;
+        // Each kind once (its angle, seat and screw's way), named by the pockets that are it.
+        const groups = new Map<string, number[]>();
+        kinds.forEach((k, i) => {
+          const key = `${k.bit === 'arc' ? k.angleDeg : POCKET.angleDeg}/${k.bit === 'arc' ? k.seat : ''}/${!!k.channel}`;
+          groups.set(key, [...(groups.get(key) ?? []), i]);
+        });
+        return [...groups.values()].map((list) => {
+          const k = kinds[list[0]!]!;
+          const names = list.map((i) => i + 1);
+          const title = names.length === 1 ? `Pocket ${names[0]}` : `Pockets ${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+          return { title, section: pocketSection(scrapThickness(values), k.bit === 'arc' ? (k.angleDeg ?? 3) : POCKET.angleDeg, k.seat, width, !!k.channel, shop.materialCatalog.find((m) => m.id === values.materialId)?.groupId === 'solid-wood') };
+        });
+      },
       defaults: { materialId: testStock?.id ?? '', bit: scrapBits[0]?.id ?? '', pockets: TEST_START },
       problems: (values) => [
         ...(shop.materialCatalog.some((m) => m.id === values.materialId) ? [] : ["Choose the scrap's material."]),
