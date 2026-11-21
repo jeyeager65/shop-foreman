@@ -129,13 +129,53 @@ export function sinkOpenings(sink: CabinetSink): [Mm, Mm][][] {
   });
 }
 
+/** A faucet's three holes are this far apart, the outer two's centres: a vanity's centreset, a kitchen's widespread. Tune me. */
+export const FAUCET_SPREAD = { vanity: 4 * IN, kitchen: 8 * IN };
+
+/** How far apart a sink's three faucet holes are: its own, else by its size (a vanity's under 18" deep). */
+export function faucetSpread(sink: Pick<CabinetSink, 'faucet' | 'depth'>): Mm {
+  return sink.faucet?.spread?.mm ?? (sink.depth.mm < 18 * IN ? FAUCET_SPREAD.vanity : FAUCET_SPREAD.kitchen);
+}
+
+/**
+ * Whether its faucet holes are cut through the top: behind an undermount, a vessel or a farmhouse sink. A drop-in has
+ * its holes in its own deck, and a top with its sink in it comes with them.
+ */
+export const holesInTop = (sink: Pick<CabinetSink, 'mount' | 'faucet'>): boolean => !!sink.faucet && (sink.mount === 'undermount' || sink.mount === 'vessel' || sink.mount === 'farmhouse');
+
+/**
+ * The faucet holes through the top, in the sink's own frame, each a loop: one hole, or three across, centred behind
+ * the sink (a vessel's 2" behind it, the others `SINK.faucetBehind`). None where `holesInTop` says not.
+ */
+export function faucetHoles(sink: CabinetSink): [Mm, Mm][][] {
+  if (!holesInTop(sink)) return [];
+  const behind = sink.depth.mm / 2 + (sink.mount === 'vessel' ? 2 * IN : SINK.faucetBehind);
+  const spread = faucetSpread(sink);
+  const xs = sink.faucet!.holes === 3 ? [-spread / 2, 0, spread / 2] : [0];
+  const hole = roundedOutline(SINK.faucetHole, SINK.faucetHole, 'oval');
+  return xs.map((x) => hole.map(([px, pz]): [Mm, Mm] => [x + px, pz - behind]));
+}
+
+/** The faucet in words: "a faucet for one hole", "a widespread faucet for three holes, 8" apart". */
+export function faucetWords(sink: Pick<CabinetSink, 'faucet' | 'depth'>, length: (mm: Mm) => string): string {
+  if (!sink.faucet) return '';
+  if (sink.faucet.holes === 1) return 'a faucet for one hole';
+  const spread = faucetSpread(sink);
+  return `a ${spread <= FAUCET_SPREAD.vanity + 1 ? 'centreset' : 'widespread'} faucet for three holes, ${length(spread)} apart`;
+}
+
 /**
  * Where a sink's centre is in its cabinet's frame: across, the cabinet's middle moved by its offset; front to back, the
  * middle of what lies between the cabinet's back and the front edge of the top over it (`front`, in the cabinet's
- * frame; left out, a guess at it).
+ * frame; left out, a guess at it), or further forward where its faucet's holes need the room behind it, an inch of
+ * top behind them.
  */
 export function sinkCentre(cabinet: Pick<CabinetDesign, 'size' | 'sink'>, front: Mm = SINK.frontGuess): [Mm, Mm] {
-  return [cabinet.size.width.mm / 2 + (cabinet.sink?.offset?.mm ?? 0), (front - cabinet.size.depth.mm) / 2];
+  const sink = cabinet.sink;
+  const centred = (front - cabinet.size.depth.mm) / 2;
+  const behind = sink && holesInTop(sink) ? (sink.mount === 'vessel' ? 2 * IN : SINK.faucetBehind) + SINK.faucetHole / 2 + IN : 0;
+  const least = sink ? -cabinet.size.depth.mm + behind + sink.depth.mm / 2 : centred;
+  return [cabinet.size.width.mm / 2 + (sink?.offset?.mm ?? 0), Math.max(centred, least)];
 }
 
 /**

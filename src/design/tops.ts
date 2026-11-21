@@ -10,7 +10,7 @@
  */
 import type { BoughtTop, CabinetDesign, CabinetSink, DesignedCabinetContext, Hardware, LeafEdge, Material, Mm, OwnTop, TopLeaf, Part, Point, Project, Run, TopDesign, TopSettings, TorsionSettings, TorsionTable, Vec3 } from '@/model';
 import { applianceFootprint, appliancePlace, applianceShapeId, appliancesOf, underCounter } from './appliances';
-import { SINK, roundedOutline, sinkCentre, sinkLook, sinkOpenings } from './sinks';
+import { SINK, faucetHoles, roundedOutline, sinkCentre, sinkLook, sinkOpenings } from './sinks';
 import { LEAF, deriveTorsionParts, leafHardwareShapes, lightTopTable, torsionRibProblem, torsionThickness } from './torsion';
 import { DROP_LEAF, dropLeafShapes } from './dropLeaf';
 import { pocketRow } from './pocketHoles';
@@ -795,6 +795,8 @@ export interface SinkCut {
   cz: Mm;
   dir: 1 | -1;
   outlines: [Mm, Mm][][];
+  /** Its faucet's holes through the top, each a loop, when they are the top's to have (`holesInTop`). */
+  holes: [Mm, Mm][][];
   x0: Mm;
   x1: Mm;
   zBack: Mm;
@@ -839,6 +841,7 @@ export function sinkCuts(project: Project, pieces: TopPiece[], torsionToo = fals
       const [lx, lz] = sinkCentre(cabinet, along !== undefined ? front : SINK.frontGuess);
       const [cx, cz] = toPiece(lx, lz);
       const outlines = sinkOpenings(sink).map((loop) => loop.map(([x, z]): [Mm, Mm] => [cx + dir * x, cz + dir * z]));
+      const holes = faucetHoles(sink).map((loop) => loop.map(([x, z]): [Mm, Mm] => [cx + dir * x, cz + dir * z]));
       const outline = outlines.flat();
       const xs = outline.map((p) => p[0]);
       const zs = outline.map((p) => p[1]);
@@ -853,6 +856,7 @@ export function sinkCuts(project: Project, pieces: TopPiece[], torsionToo = fals
         cz,
         dir,
         outlines,
+        holes,
         x0: outline.length ? Math.min(...xs) : cx - half[0]!,
         x1: outline.length ? Math.max(...xs) : cx + half[0]!,
         zBack: outline.length ? Math.min(...zs) : cz - half[1]!,
@@ -895,13 +899,17 @@ export function sinkProblems(project: Project, cabinet: CabinetDesign, materials
   if (cut && !cut.piece.torsion && sink.mount !== 'vessel' && sink.mount !== 'integrated') {
     const room = cut.piece.zFront - cut.piece.zBack;
     if (sink.depth.mm > room - 2 * SINK.rim) out.push(`The sink is ${length(sink.depth.mm)} front to back, and the top over it ${length(room)}: choose a shallower sink.`);
+    // Its faucet holes need the top behind them: an inch past the hole's edge, at least.
+    const back = Math.min(...cut.holes.flat().map((p) => p[1]));
+    if (cut.holes.length && cut.dir === 1 && back - cut.piece.zBack < MM_PER_INCH - 0.5) out.push(`The faucet holes come within an inch of the top's back edge: move the sink forward, choose a shallower one, or a faucet on the wall.`);
   }
   return out;
 }
 
 /** A sink's opening as a feature of a top's panel whose front-left corner (seen from above) is at `x0`, `zFront` in the piece's frame. */
 function sinkFeature(cut: SinkCut, x0: Mm, zFront: Mm): Part['features'] {
-  return cut.outlines.map((loop, i) => ({ id: `sink-${cut.cabinetId}${i ? `-${i + 1}` : ''}`, kind: 'cutout' as const, face: 'A' as const, inside: true, outline: loop.map(([x, z]) => ({ x: x - x0, y: zFront - z })) }));
+  const holes = cut.holes.map((loop, i) => ({ id: `faucet-${cut.cabinetId}-${i + 1}`, kind: 'cutout' as const, face: 'A' as const, inside: true, outline: loop.map(([x, z]) => ({ x: x - x0, y: zFront - z })) }));
+  return [...holes, ...cut.outlines.map((loop, i) => ({ id: `sink-${cut.cabinetId}${i ? `-${i + 1}` : ''}`, kind: 'cutout' as const, face: 'A' as const, inside: true, outline: loop.map(([x, z]) => ({ x: x - x0, y: zFront - z })) }))];
 }
 
 /** How thick the project's tops are: made here, bought, or measured. */

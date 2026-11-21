@@ -108,6 +108,8 @@ import {
   SINK_MOUNTS,
   newSink,
   sinkOfKind,
+  faucetSpread,
+  holesInTop,
   sinkProblems,
   sinkWords,
   takesTopSupport,
@@ -777,6 +779,22 @@ const setSinkOffset = (value: Length | null) => {
   if (!sink) return;
   if (value && Math.abs(value.mm) > 0.01) sink.offset = value;
   else delete sink.offset;
+};
+const FAUCETS = [
+  { title: 'None (on the wall, or fitted later)', value: 'none' },
+  { title: 'One hole', value: '1' },
+  { title: 'Three holes', value: '3' },
+];
+const faucetChoice = computed(() => String(cabinet.value.sink?.faucet?.holes ?? 'none'));
+const setFaucet = (value: string) => {
+  const sink = cabinet.value.sink;
+  if (!sink) return;
+  if (value === 'none') delete sink.faucet;
+  else sink.faucet = { holes: value === '3' ? 3 : 1, ...(sink.faucet?.spread ? { spread: sink.faucet.spread } : {}) };
+};
+const setFaucetSpread = (value: Length | null) => {
+  const faucet = cabinet.value.sink?.faucet;
+  if (faucet && value && value.mm > 0) faucet.spread = value;
 };
 /** What is wrong with the sink: no top over it, a bowl wider than the case. */
 const sinkProblemList = computed(() => (cabinet.value.sink ? sinkProblems(store.project!, cabinet.value, store.materials, L.value) : []));
@@ -2247,7 +2265,12 @@ function notes(part: Part): string[] {
             <v-col cols="4"><LengthField v-model="cabinet.sink.depth" label="Front to back" /></v-col>
             <v-col cols="4"><LengthField v-model="cabinet.sink.bowlDepth" label="Bowl depth" /></v-col>
             <v-col cols="6"><LengthField :model-value="cabinet.sink.offset ?? len('0')" label="Right of centre" data-test="sink-offset" @update:model-value="setSinkOffset" /></v-col>
+            <v-col v-if="cabinet.sink.mount !== 'integrated'" cols="6"><v-select :model-value="faucetChoice" label="Faucet" :items="FAUCETS" hide-details data-test="sink-faucet" @update:model-value="setFaucet" /></v-col>
+            <v-col v-if="cabinet.sink.faucet?.holes === 3" cols="6"><LengthField :model-value="{ mm: faucetSpread(cabinet.sink), unit: 'in' }" label="Outer holes apart" data-test="sink-spread" @update:model-value="setFaucetSpread" /></v-col>
           </v-row>
+          <div v-if="cabinet.sink.faucet && cabinet.sink.mount !== 'integrated'" class="text-body-2 text-medium-emphasis mt-2" data-test="sink-faucet-words">
+            {{ holesInTop(cabinet.sink) ? `Its holes, ${L(SINK.faucetHole)} across, are cut through the top behind the sink.` : "A drop-in sink has its faucet's holes in its own deck: none are cut in the top." }}
+          </div>
           <v-alert v-for="w in sinkProblemList" :key="w" type="warning" variant="tonal" density="compact" class="mt-2" data-test="sink-problem">{{ w }}</v-alert>
           <HelpText>
             The sink is the cabinet's: it is set in whatever top lies over the cabinet (the run's, its own, an island's), with or

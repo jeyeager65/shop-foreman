@@ -4,7 +4,7 @@
  * drilled with the Kreg jig, each with its positions. All derived from the job;
  * nothing here is stored and nothing changes a part.
  */
-import { DROP_LEAF, SEATING, seatingBrackets, seatingEdgeLength, FRAME_DOWELS, LEAF, frameLeafOf, frameTop, backAgainstWall, dropLeafHinges, dropLeafSupport, leafEdgeWords, leafSidesWords, towerSpans, closetRod, hangingWords, framesOf, frameFasteners, needsAntiTip, deriveUnderSink, falseFrontsOf, sinkWords, deriveSusan, susanOf, doorsOnSusan, CASE_SCREW, finishAmounts, cansOf, usesWords, coverageShown, coverageUnit, casterGroups, isCaster, boughtLength, boughtTopOf, lazySusanDiameter, topPieces, topSettingsOf, RUNNER_SCREW, RUNNER_SCREWS, fasteningHole, cabinetIdOf, cabinetsOf, copiesOf, partTag, designsOf, drawerBox, hungDesigns, isDoorSet, isDrawer, partFaces, shelfPinFor } from '@/design';
+import { DROP_LEAF, SEATING, seatingBrackets, seatingEdgeLength, FRAME_DOWELS, LEAF, frameLeafOf, frameTop, backAgainstWall, dropLeafHinges, dropLeafSupport, leafEdgeWords, leafSidesWords, towerSpans, closetRod, hangingWords, framesOf, frameFasteners, needsAntiTip, deriveUnderSink, falseFrontsOf, sinkWords, faucetSpread, faucetWords, holesInTop, deriveSusan, susanOf, doorsOnSusan, CASE_SCREW, finishAmounts, cansOf, usesWords, coverageShown, coverageUnit, casterGroups, isCaster, boughtLength, boughtTopOf, lazySusanDiameter, topPieces, topSettingsOf, RUNNER_SCREW, RUNNER_SCREWS, fasteningHole, cabinetIdOf, cabinetsOf, copiesOf, partTag, designsOf, drawerBox, hungDesigns, isDoorSet, isDrawer, partFaces, shelfPinFor } from '@/design';
 import { HUB, hubOf } from '@/design/hub';
 import { POCKET, jigSleeve, lowPocketScrew, pocketAxis, pocketShape, sleeveWords } from '@/geometry/pocketHole';
 import { cncPocketsFit, lowAngleOf, pocketHoleMethod, pocketSeatOf } from '@/plan/parts';
@@ -1138,7 +1138,8 @@ function sinksToBuy(project: Project, length: (mm: Mm) => string): BuyRow[] {
     const size = { width: sink.width.mm, height: sink.depth.mm };
     if (sink.mount === 'integrated') return [{ material: 'Vanity top with its sink in it', quantity: copiesOf(cabinet), unit: 'piece', size, note: `${length(sink.width.mm)} × ${length(sink.depth.mm)}, its bowl ${length(sink.bowlDepth.mm)} deep, over ${cabinet.name || 'the cabinet'}: bought, with its faucet holes.` }];
     const how = { dropIn: 'its rim on the top', undermount: 'fixed under the top with its clips', vessel: 'standing on the top, with its drain', farmhouse: 'standing on its frame in the cabinet, its apron in front', integrated: '' }[sink.mount];
-    return [{ material: sinkWords(sink, length), quantity: copiesOf(cabinet), unit: 'piece', size, note: `Over ${cabinet.name || 'the cabinet'}, ${how}${sink.double ? `, ${sink.double.leftShare > 0.55 ? '60/40' : 'equal'} bowls` : ''}, ${length(sink.bowlDepth.mm)} deep. Its sizes are the maker's: check them against the one bought before the top is cut.` }];
+    const faucet = sink.faucet ? [{ material: `Faucet, ${sink.faucet.holes === 1 ? 'one hole' : `three holes, ${length(faucetSpread(sink))} apart`}`, quantity: copiesOf(cabinet), unit: 'piece' as const, note: `For ${cabinet.name || 'the cabinet'}'s sink: ${faucetWords(sink, length)}${holesInTop(sink) ? ', its holes cut through the top' : ', on the sink\'s own deck'}.` }] : [];
+    return [{ material: sinkWords(sink, length), quantity: copiesOf(cabinet), unit: 'piece', size, note: `Over ${cabinet.name || 'the cabinet'}, ${how}${sink.double ? `, ${sink.double.leftShare > 0.55 ? '60/40' : 'equal'} bowls` : ''}, ${length(sink.bowlDepth.mm)} deep. Its sizes are the maker's: check them against the one bought before the top is cut.` }, ...faucet];
   });
 }
 

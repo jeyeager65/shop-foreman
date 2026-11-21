@@ -1,5 +1,5 @@
 import { batchInHand, batchWants } from './batch';
-import { FRAME_DOWELS, SEATING, seatingBrackets, frameLeafOf, frameTop, backAgainstWall, dropLeafHinges, dropLeafSupport, leafEdgeWords, leafSidesWords, boxOf, postsOf, POST_SETBACK, legFrameMiddles, piecesOf, towerSpans, onLegs, framesOf, frameFasteners, frameLayout, clearCoatOf, coatsWords, finishSteps, finishesOf, casterGroups, CASTER_INSET, susanOf, sinkCuts, SINK, topPieces, topSettingsOf, cabinetIdOf, cabinetTags, cabinetsOf, copiesOf, designsOf, runFit, tagged, deriveWayIn } from '@/design';
+import { FRAME_DOWELS, SEATING, seatingBrackets, frameLeafOf, frameTop, backAgainstWall, dropLeafHinges, dropLeafSupport, leafEdgeWords, leafSidesWords, boxOf, postsOf, POST_SETBACK, legFrameMiddles, piecesOf, towerSpans, onLegs, framesOf, frameFasteners, frameLayout, clearCoatOf, coatsWords, finishSteps, finishesOf, casterGroups, CASTER_INSET, susanOf, sinkCuts, SINK, faucetSpread, topPieces, topSettingsOf, cabinetIdOf, cabinetTags, cabinetsOf, copiesOf, designsOf, runFit, tagged, deriveWayIn } from '@/design';
 import { hubOf } from '@/design/hub';
 import { JOIN_SCREWS } from './lists';
 import { jigSleeve, sleeveGoesIn, sleeveWords } from '@/geometry/pocketHole';
@@ -604,6 +604,13 @@ export function buildChecklistSections(
       else if (onCnc) say(`The CNC cuts ${opening} with its top: check that size against the sink's own template before cutting. Seal the opening's raw edges.`);
       else if (sink.mount === 'vessel') say(`Drill ${opening} by hand with a hole saw, where the vessel's drain stands.`);
       else say(`Cut the opening${cut.outlines.length > 1 ? 's' : ''} for the ${name} by hand: ${size}${cut.outlines.length > 1 ? ' over both, one for each bowl' : ''}, centred front to back, marked from the sink's own template. Drill the corners, cut between them with a jigsaw from the top face, and support the waste so it does not tear out as it drops.`);
+      // Its faucet's holes through the top: with the opening on the CNC, else drilled by hand with a hole saw.
+      if (cut.holes.length) {
+        const holes = `${cut.holes.length === 1 ? 'the faucet hole' : `the ${cut.holes.length} faucet holes, the outer two ${show(faucetSpread(sink))} apart centre to centre, each`} ${show(SINK.faucetHole)} across, centred behind the ${name}`;
+        if (kind === 'measured') say(`Give the supplier ${holes}, to be cut with the opening.`);
+        else if (onCnc) say(`The CNC cuts ${holes}: check them against the faucet's own sheet before cutting.`);
+        else say(`Drill ${holes}, with a hole saw from the top face, marked from the faucet's own sheet.`);
+      }
       if (sink.mount === 'dropIn') say(`Set the ${name} in a bead of sealant and clamp it from below with its clips.`);
       else if (sink.mount === 'undermount') say(`Before the top goes on: turn it over, set the ${name} under its opening${cut.outlines.length > 1 ? 's' : ''} in a bead of silicone, centred on them, and fix it with its clips. Ease and seal the opening's edge, which shows.`);
       else if (sink.mount === 'vessel') say(`Set the ${name} on its drain over the hole, in a bead of silicone, and tighten the drain from below.`);

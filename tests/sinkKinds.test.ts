@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { SINK, cabinetsOf, sinkCuts, sinkLook, sinkOfKind, sinkProblems, sinkShapes, starterTopSettings, topPieces } from '@/design';
+import { FAUCET_SPREAD, SINK, cabinetsOf, faucetSpread, sinkCuts, sinkLook, sinkOfKind, sinkProblems, sinkShapes, starterTopSettings, topPieces } from '@/design';
 import { buildChecklistSections } from '@/job/checklist';
 import { buildJob } from '@/job/buildJob';
 import { buildLists } from '@/job/lists';
@@ -131,5 +131,50 @@ describe('a sink as the 3D view draws it', () => {
     const [basin] = sinkShapes(project, project.materials, shop.hardware);
     expect(basin!.sinkLook?.bowls).toHaveLength(1);
     expect(basin!.size.width).toBeCloseTo(cabinetsOf(project)[0]!.sink!.width.mm, 6);
+  });
+});
+
+describe('faucet holes', () => {
+  it('are cut through a top made here behind an undermount sink: one, or three a kitchen\'s 8" apart', () => {
+    const three = cut(withSink({ mount: 'undermount', faucet: { holes: 3 } }))!;
+    expect(three.holes).toHaveLength(3);
+    const xs = three.holes.map((loop) => (Math.min(...loop.map((p) => p[0])) + Math.max(...loop.map((p) => p[0]))) / 2);
+    expect(xs[2]! - xs[0]!).toBeCloseTo(FAUCET_SPREAD.kitchen, 6);
+    // Behind the sink: every hole's front edge behind its back edge.
+    const sinkBack = three.cz - cabinetsOf(withSink({ mount: 'undermount' }))[0]!.sink!.depth.mm / 2;
+    for (const loop of three.holes) expect(Math.max(...loop.map((p) => p[1]))).toBeLessThan(sinkBack);
+    const one = cut(withSink({ mount: 'undermount', faucet: { holes: 1 } }))!;
+    expect(one.holes).toHaveLength(1);
+    const across = Math.max(...one.holes[0]!.map((p) => p[0])) - Math.min(...one.holes[0]!.map((p) => p[0]));
+    expect(across).toBeCloseTo(SINK.faucetHole, 1);
+    const panel = buildJob(withSink({ mount: 'undermount', faucet: { holes: 3 } }), shop).cabinetParts.find((p) => p.name === 'Countertop')!;
+    expect(panel.features.filter((f) => f.id.startsWith('faucet-'))).toHaveLength(3);
+  });
+
+  it('are none in the top for a drop-in, whose deck has them; the faucet is bought either way', () => {
+    const project = withSink({ mount: 'dropIn', faucet: { holes: 3 } });
+    expect(cut(project)!.holes).toEqual([]);
+    const lists = buildLists(buildJob(project, shop), project, shop, words);
+    expect(lists.buying.find((b) => b.material.startsWith('Faucet, three holes'))?.note).toMatch(/on the sink's own deck/);
+  });
+
+  it('a vanity\'s three are 4" apart, and the checklist says to cut them', () => {
+    const project = withSink({ mount: 'vessel', faucet: { holes: 3 } });
+    expect(faucetSpread(cabinetsOf(project)[0]!.sink!)).toBeCloseTo(FAUCET_SPREAD.vanity, 6);
+    const job = buildJob(project, shop);
+    const steps = buildChecklistSections(project, job.plan, job.programs, shop.tools, activeMachine(shop)).find((s) => s.title === 'Tops')!.steps.map((s) => s.text);
+    expect(steps.some((s) => /faucet holes/.test(s))).toBe(true);
+  });
+});
+
+describe('a sink with its faucet holes in the top', () => {
+  it('sits forward enough on a vanity to leave an inch of top behind the holes', () => {
+    const project = withSink({ mount: 'undermount', faucet: { holes: 3 } });
+    const stored = (project.context as CasesContext).pieces[0]!;
+    stored.size.depth = len('21"');
+    stored.sink = { ...stored.sink!, width: len('19"'), depth: len('16"'), shape: 'oval' };
+    expect(problems(project).some((w) => /faucet holes/.test(w))).toBe(false);
+    const c = cut(project)!;
+    expect(Math.min(...c.holes.flat().map((p) => p[1])) - c.piece.zBack).toBeGreaterThanOrEqual(len('1"').mm - 0.5);
   });
 });

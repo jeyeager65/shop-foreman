@@ -107,7 +107,7 @@ void store.load().then(async () => {
       opened.adjustableShelves = 0;
     }
     if (opened && support === 'none') opened.topSupport = undefined;
-    // &basin=dropIn (or undermount, vessel, integrated, farmhouse; `:double`, `:6040` two bowls; `:oval`; none) a sink
+    // &basin=dropIn (or undermount, vessel, integrated, farmhouse; `:double`, `:6040` two bowls; `:oval`; `:faucet3`; none) a sink
     // over it, set in the top over it, sized to suit the cabinet.
     const basin = new URLSearchParams(location.search).get('basin');
     if (opened && basin) {
@@ -119,6 +119,8 @@ void store.load().then(async () => {
         if (more.includes('oval')) made.shape = 'oval';
         if (more.includes('rectangle')) made.shape = 'rectangle';
         if (more.includes('double') || more.includes('6040')) made.double = { leftShare: more.includes('6040') ? 0.6 : 0.5 };
+        // `:faucet1`, `:faucet3`: a faucet for one hole or three.
+        if (more.includes('faucet1') || more.includes('faucet3')) made.faucet = { holes: more.includes('faucet3') ? 3 : 1 };
         opened.sink = made;
       }
     }
