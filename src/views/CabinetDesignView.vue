@@ -748,9 +748,19 @@ const planAppliances = computed(() =>
   }),
 );
 /** The cabinet's sink: on with one that suits its size, off with none. */
+/**
+ * The top a sink is set in: a cabinet in a run has its run's, one on its own a countertop of its own (Setup's kind of
+ * top). Given where there is none; a bought top with its sink in it takes a lone cabinet's own countertop away.
+ */
+function giveSinkTop() {
+  if (run.value) run.value.top ??= {};
+  else cabinet.value.top ??= {};
+}
 const setCabinetSink = (on: boolean) => {
-  if (on) cabinet.value.sink = newSink(cabinet.value);
-  else delete cabinet.value.sink;
+  if (on) {
+    cabinet.value.sink = newSink(cabinet.value);
+    giveSinkTop();
+  } else delete cabinet.value.sink;
 };
 /** The kinds offered: every one. */
 const sinkMounts = computed(() => SINK_MOUNTS);
@@ -762,7 +772,12 @@ const setSinkMount = (mount: SinkMount) => {
   cabinet.value.sink = { ...next, ...(now.offset ? { offset: now.offset } : {}), ...(now.faucet && mount !== 'integrated' ? { faucet: now.faucet } : {}) };
   // A farmhouse sink's apron takes the top row of a drawer over doors: a cabinet without one is given that layout.
   if (mount === 'farmhouse' && !farmhouseRow(cabinet.value)) applyCabinetLayout(store.project!, cabinet.value, 'drawerOverDoors');
+  // Set in a top, it needs one; a bought top with its sink is the top, in place of a lone cabinet's own countertop.
+  if (mount !== 'integrated') giveSinkTop();
+  else if (!run.value && cabinet.value.top && !cabinet.value.top.own) delete cabinet.value.top;
 };
+/** Whether the sink's warning is that no top lies over it, which a button then puts right. */
+const sinkWantsTop = computed(() => sinkProblemList.value.some((w) => w.startsWith('No top lies over')));
 const SINK_SHAPES = [
   { title: 'Square or rectangle', value: 'rectangle' },
   { title: 'Round or oval', value: 'oval' },
@@ -2342,6 +2357,7 @@ function notes(part: Part): string[] {
             {{ holesInTop(cabinet.sink) ? `Its holes, ${L(SINK.faucetHole)} across, are cut through the top behind the sink.` : "A drop-in sink has its faucet's holes in its own deck: none are cut in the top." }}
           </div>
           <v-alert v-for="w in sinkProblemList" :key="w" type="warning" variant="tonal" density="compact" class="mt-2" data-test="sink-problem">{{ w }}</v-alert>
+          <v-btn v-if="sinkWantsTop" size="small" variant="tonal" color="primary" class="mt-2" data-test="sink-give-top" @click="giveSinkTop">{{ run ? 'Give its run a top' : 'Give it a countertop' }}</v-btn>
           <HelpText>
             The sink is the cabinet's: it is set in whatever top lies over the cabinet (the run's, its own, an island's), with or
             without a room. Its sizes are the maker's, outside: the rim of a drop-in, the bowl of an undermount. A drop-in's opening
