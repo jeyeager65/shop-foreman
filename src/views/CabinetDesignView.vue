@@ -17,7 +17,7 @@ import PlacementFields from '@/components/PlacementFields.vue';
  * cards, the 3D view and the parts list are about, and adds, copies, deletes and
  * reorders them. `#/design?cabinet=2` opens on the second.
  */
-import { mdiArrowLeft, mdiArrowRight, mdiChevronDown, mdiContentCopy, mdiPlus, mdiTrashCanOutline } from '@mdi/js';
+import { mdiArrowLeft, mdiArrowRight, mdiChevronDown, mdiChevronRight, mdiContentCopy, mdiPlus, mdiTrashCanOutline } from '@mdi/js';
 import { computed, defineAsyncComponent, nextTick, ref, provide, watch } from 'vue';
 import { projectLayoutWarnings } from '@/design/scene';
 import { useRoute, useRouter } from 'vue-router';
@@ -136,7 +136,6 @@ import {
   measuredInside,
   existingShellParts,
   deriveUnderSink,
-  ORGANIZER_KINDS,
   TALL_TRAY_WALL,
   RACK_DOORS,
   createDoorRacks,
@@ -1177,6 +1176,57 @@ function setOrganizerUp(o: Organizer, value: Length | null) {
 function addObstacle(kind: ObstacleKind) {
   const sink = cabinet.value.inside;
   if (sink) sink.obstacles = [...sink.obstacles, createObstacle(kind, sink.obstacles)];
+}
+/** The Inside topic's lines that are open: a block in the way, or something made. One just added opens. */
+const openItems = ref(new Set<string>());
+function toggleItem(id: string) {
+  const open = new Set(openItems.value);
+  if (!open.delete(id)) open.add(id);
+  openItems.value = open;
+}
+const capitalised = (text: string) => `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+function addObstacleOpen(kind: ObstacleKind) {
+  const before = new Set(cabinet.value.inside?.obstacles.map((o) => o.id));
+  addObstacle(kind);
+  const made = cabinet.value.inside?.obstacles.find((o) => !before.has(o.id));
+  if (made) openItems.value = new Set([...openItems.value, made.id]);
+}
+function addOrganizerOpen(kind: Organizer['kind'], tall = false) {
+  const before = new Set(cabinet.value.inside?.organizers.map((o) => o.id));
+  addOrganizer(kind, tall);
+  const made = cabinet.value.inside?.organizers.find((o) => !before.has(o.id));
+  if (made) openItems.value = new Set([...openItems.value, made.id]);
+}
+/** What can be made inside, for the Add menu (a blind corner tray only in a blind corner cabinet). */
+const organizerAdds = computed(() => [
+  { title: 'Tray', kind: 'tray' as const, tall: false, test: 'tray' },
+  { title: 'Tall tray for bottles', kind: 'tray' as const, tall: true, test: 'tall' },
+  { title: 'Shelf', kind: 'shelf' as const, tall: false, test: 'shelf' },
+  { title: 'Shelf with side trays', kind: 'sideTrays' as const, tall: false, test: 'sideTrays' },
+  { title: 'Trash pull-out', kind: 'pullOut' as const, tall: false, test: 'pullOut' },
+  { title: 'Narrow pull-out', kind: 'narrow' as const, tall: false, test: 'narrow' },
+  { title: 'Dividers', kind: 'dividers' as const, tall: false, test: 'dividers' },
+  ...(cabinet.value.corner?.kind === 'blind' ? [{ title: 'Blind corner tray', kind: 'blindTray' as const, tall: false, test: 'blindTray' }] : []),
+]);
+/** A block's line, closed: its size and where it is. "6" × 10", 10" clear under it". */
+function obstacleSummary(o: Obstacle): string {
+  return [
+    `${L.value(o.width.mm)} × ${L.value(o.depth.mm)}`,
+    o.fromLeft ? `${L.value(o.fromLeft.mm)} from the left` : '',
+    o.fromBack ? `${L.value(o.fromBack.mm)} out from the back` : '',
+    o.clearUnder ? `${L.value(o.clearUnder.mm)} clear under it` : 'on the floor',
+    o.height ? `${L.value(o.height.mm)} tall` : '',
+  ]
+    .filter(Boolean)
+    .join(', ');
+}
+/** Something made, closed: where it stands and, for a tray, its size as made. */
+function organizerSummary(o: Organizer): string {
+  const made = underSink.value?.trays.find((t) => t.name === organizerName(o));
+  const where = o.up && o.up.mm > 0 ? `${L.value(o.up.mm)} up` : o.kind === 'shelf' || o.kind === 'sideTrays' ? '' : 'on the floor';
+  const size = made ? `${L.value(made.width)} × ${L.value(made.length)} × ${L.value(made.height)}` : '';
+  const bins = o.kind === 'pullOut' && o.bins ? `${o.bins.count === 2 ? 'two bins' : 'a bin'} ${L.value(o.bins.width.mm)} × ${L.value(o.bins.depth.mm)}` : '';
+  return [where, bins, size, made?.round ? `cut round ${made.round}` : ''].filter(Boolean).join(', ');
 }
 function removeObstacle(id: string) {
   const sink = cabinet.value.inside;
@@ -2488,187 +2538,184 @@ function notes(part: Part): string[] {
 
       <!-- What stands inside it: what is in the way, trays, shelves and racks. -->
       <div v-if="sinkOffered" v-show="nav.current.id === 'inside'" data-test="topic-inside">
-        <v-row v-if="sinkOffered" density="compact" class="mb-1" data-test="sink">
-          <v-col cols="12">
-            <v-switch :model-value="!!cabinet.inside" label="Fitted out inside: trays and shelves behind its doors" color="primary" density="compact" hide-details data-test="sink-on" @update:model-value="setSink(!!$event)" />
-          </v-col>
-          <template v-if="cabinet.inside">
-            <v-col v-if="!cabinet.inside.obstacles.length && !cabinet.inside.organizers.length" cols="12">
-              <v-btn size="small" variant="tonal" color="primary" data-test="start-under-sink" @click="startUnderSink">It is under a sink: start with its trap and a tray</v-btn>
-            </v-col>
-            <v-col cols="12" class="text-body-2 text-medium-emphasis">
-              What is in the way, each measured as a block: under a sink, the trap and the drain, the bowl, the supply valves, a disposal. They are
-              drawn grey and never cut; what is made is cut round them. A cabinet with nothing in the way has none.
-            </v-col>
-            <v-col v-for="o in cabinet.inside.obstacles" :key="o.id" cols="12" data-test="obstacle">
-              <v-row density="compact">
-                <v-col cols="10"><v-select v-model="o.kind" label="In the way" :items="OBSTACLE_KINDS" hide-details /></v-col>
-                <v-col cols="2" class="d-flex align-center">
-                  <v-btn :icon="mdiTrashCanOutline" variant="text" size="small" :aria-label="`Remove ${obstacleName(o)}`" data-test="obstacle-remove" @click="removeObstacle(o.id)" />
+        <v-switch :model-value="!!cabinet.inside" label="Fitted out inside: trays and shelves behind its doors" color="primary" density="compact" hide-details data-test="sink-on" @update:model-value="setSink(!!$event)" />
+        <template v-if="cabinet.inside">
+          <v-btn v-if="!cabinet.inside.obstacles.length && !cabinet.inside.organizers.length" size="small" variant="tonal" color="primary" class="mt-2" data-test="start-under-sink" @click="startUnderSink">
+            It is under a sink: start with its trap and a tray
+          </v-btn>
+
+          <!-- What is in the way: each a line that opens to its measurements. -->
+          <SubHead>In the way</SubHead>
+          <div v-if="!cabinet.inside.obstacles.length" class="text-body-2 text-medium-emphasis">Nothing: add the trap, the valves and whatever else stands under the sink.</div>
+          <div v-for="o in cabinet.inside.obstacles" :key="o.id" class="item" data-test="obstacle">
+            <div class="item-line" @click="toggleItem(o.id)">
+              <v-icon :icon="openItems.has(o.id) ? mdiChevronDown : mdiChevronRight" size="18" />
+              <span class="font-weight-medium">{{ o.name ?? OBSTACLE_KINDS.find((k) => k.value === o.kind)?.title ?? capitalised(obstacleName(o)) }}</span>
+              <span class="text-body-2 text-medium-emphasis item-summary">{{ obstacleSummary(o) }}</span>
+              <v-btn :icon="mdiTrashCanOutline" variant="text" size="x-small" :aria-label="`Remove ${obstacleName(o)}`" data-test="obstacle-remove" @click.stop="removeObstacle(o.id)" />
+            </div>
+            <v-row v-if="openItems.has(o.id)" density="compact" class="item-fields">
+              <v-col cols="12"><v-select v-model="o.kind" label="What it is" :items="OBSTACLE_KINDS" hide-details density="compact" /></v-col>
+              <v-col cols="6"><LengthField v-model="o.width" label="Across" /></v-col>
+              <v-col cols="6"><LengthField v-model="o.depth" label="Front to back" /></v-col>
+              <v-col cols="6"><LengthField :model-value="o.fromLeft ?? null" label="From the left side" optional empty-text="in the middle" @update:model-value="setObstacle(o, 'fromLeft', $event)" /></v-col>
+              <v-col cols="6"><LengthField :model-value="o.fromBack ?? null" label="Out from the back" optional empty-text="against it" @update:model-value="setObstacle(o, 'fromBack', $event)" /></v-col>
+              <v-col cols="6"><LengthField :model-value="o.clearUnder ?? null" label="Clear under it" optional empty-text="on the floor" @update:model-value="setObstacle(o, 'clearUnder', $event)" /></v-col>
+              <v-col cols="6"><LengthField :model-value="o.height ?? null" label="How tall" optional :empty-text="cabinet.sink ? 'to the sink' : 'up to the top'" @update:model-value="setObstacle(o, 'height', $event)" /></v-col>
+            </v-row>
+          </div>
+          <v-menu>
+            <template #activator="{ props: menu }">
+              <v-btn v-bind="menu" size="small" variant="tonal" :prepend-icon="mdiPlus" class="mt-2" data-test="add-obstacle">Add something in the way</v-btn>
+            </template>
+            <v-list density="compact">
+              <v-list-item v-for="k in OBSTACLE_KINDS" :key="k.value" :title="k.title" :data-test="`add-obstacle-${k.value}`" @click="addObstacleOpen(k.value)" />
+            </v-list>
+          </v-menu>
+
+          <!-- What is made for it, from the floor up: each a line that opens. -->
+          <SubHead>Made for it</SubHead>
+          <div v-if="!cabinet.inside.organizers.length" class="text-body-2 text-medium-emphasis">Nothing yet: add a tray, a shelf or a pull-out.</div>
+          <div v-for="o in cabinet.inside.organizers" :key="o.id" class="item" data-test="organizer">
+            <div class="item-line" @click="toggleItem(o.id)">
+              <v-icon :icon="openItems.has(o.id) ? mdiChevronDown : mdiChevronRight" size="18" />
+              <span class="font-weight-medium">{{ organizerName(o) }}</span>
+              <span class="text-body-2 text-medium-emphasis item-summary">{{ organizerSummary(o) }}</span>
+              <v-btn :icon="mdiTrashCanOutline" variant="text" size="x-small" :aria-label="`Remove the ${organizerName(o).toLowerCase()}`" data-test="organizer-remove" @click.stop="removeOrganizer(o.id)" />
+            </div>
+            <v-row v-if="openItems.has(o.id)" density="compact" class="item-fields">
+              <template v-if="o.kind === 'pullOut' && o.bins">
+                <v-col cols="6"><LengthField v-model="o.bins.width" label="A bin, across" /></v-col>
+                <v-col cols="6"><LengthField v-model="o.bins.depth" label="A bin, front to back" /></v-col>
+                <v-col cols="6"><LengthField v-model="o.bins.height" label="A bin, high" /></v-col>
+                <v-col cols="6"><v-select v-model="o.bins.count" label="Bins, one behind another" :items="[1, 2]" hide-details density="compact" /></v-col>
+                <v-col cols="12"><LengthField :model-value="o.fromLeft ?? null" label="Its frame, from the left side" optional empty-text="as far left as the opening lets it" @update:model-value="setOrganizerLength(o, 'fromLeft', $event)" /></v-col>
+              </template>
+              <template v-else-if="o.kind === 'narrow'">
+                <v-col cols="6"><LengthField :model-value="o.width ?? null" label="How wide, outside" optional :placeholder-mm="6 * 25.4" @update:model-value="setOrganizerLength(o, 'width', $event)" /></v-col>
+                <v-col cols="6"><LengthField :model-value="o.wall ?? null" label="Its walls" optional :placeholder-mm="8 * 25.4" @update:model-value="setOrganizerLength(o, 'wall', $event)" /></v-col>
+                <v-col cols="12"><LengthField :model-value="o.fromLeft ?? null" label="Its frame, from the left side" optional empty-text="as far left as the opening lets it" @update:model-value="setOrganizerLength(o, 'fromLeft', $event)" /></v-col>
+              </template>
+              <template v-else-if="o.kind === 'dividers'">
+                <v-col cols="6"><v-select v-model="o.count" label="Boards, the ends counted" :items="[2, 3, 4, 5, 6, 7, 8, 10, 12]" hide-details density="compact" /></v-col>
+                <v-col cols="6"><LengthField :model-value="o.height ?? null" label="How tall" optional @update:model-value="setOrganizerLength(o, 'height', $event)" /></v-col>
+                <v-col cols="6"><LengthField :model-value="o.width ?? null" label="How wide" optional empty-text="the whole inside" @update:model-value="setOrganizerLength(o, 'width', $event)" /></v-col>
+                <v-col cols="6"><LengthField :model-value="o.fromLeft ?? null" label="From the left side" optional empty-text="against it" @update:model-value="setOrganizerLength(o, 'fromLeft', $event)" /></v-col>
+                <v-col cols="12"><LengthField :model-value="o.up ?? null" label="Its base, above the floor" optional empty-text="on the floor" @update:model-value="setOrganizerLength(o, 'up', $event)" /></v-col>
+              </template>
+              <template v-else>
+                <v-col cols="6">
+                  <LengthField :model-value="o.up ?? null" :label="o.kind === 'tray' || o.kind === 'blindTray' ? 'Above the floor' : 'Its top, above the floor'" optional empty-text="on the floor" @update:model-value="setOrganizerUp(o, $event)" />
                 </v-col>
-                <v-col cols="6"><LengthField v-model="o.width" label="Across" /></v-col>
-                <v-col cols="6"><LengthField v-model="o.depth" label="Front to back" /></v-col>
-                <v-col cols="6"><LengthField :model-value="o.fromLeft ?? null" label="From the left side" optional hint="Empty: in the middle" @update:model-value="setObstacle(o, 'fromLeft', $event)" /></v-col>
-                <v-col cols="6"><LengthField :model-value="o.fromBack ?? null" label="Out from the back" optional hint="Empty: against it" @update:model-value="setObstacle(o, 'fromBack', $event)" /></v-col>
-                <v-col cols="6"><LengthField :model-value="o.clearUnder ?? null" label="Clear under it" optional hint="Empty: on the floor" @update:model-value="setObstacle(o, 'clearUnder', $event)" /></v-col>
-                <v-col cols="6"><LengthField :model-value="o.height ?? null" label="How tall" optional hint="Empty: up to the top" @update:model-value="setObstacle(o, 'height', $event)" /></v-col>
-              </v-row>
-            </v-col>
-            <v-col cols="12" class="d-flex flex-wrap ga-2 align-center">
-              <span class="text-body-2 text-medium-emphasis">Add:</span>
-              <v-btn v-for="k in OBSTACLE_KINDS" :key="k.value" size="small" variant="tonal" :prepend-icon="mdiPlus" :data-test="`add-obstacle-${k.value}`" @click="addObstacle(k.value)">{{ k.title }}</v-btn>
-            </v-col>
-            <v-col cols="12" class="text-body-2 text-medium-emphasis">
-              "From the left side" is from the inside of the cabinet's left side to the block's left edge; "Clear under it" from the cabinet's floor
-              up to its lowest point. What is made, from the cabinet's floor up, behind the doors:
-            </v-col>
-            <v-col v-for="o in cabinet.inside.organizers" :key="o.id" cols="12" data-test="organizer">
-              <v-row density="compact" class="align-center">
-                <v-col cols="10">
-                  <div class="font-weight-bold">{{ organizerName(o) }}</div>
-                  <div class="text-caption text-medium-emphasis">{{ ORGANIZER_KINDS.find((k) => k.value === o.kind)?.title }}</div>
+                <v-col v-if="o.kind === 'tray'" cols="6"><LengthField :model-value="o.wall ?? null" label="Its walls" optional :placeholder-mm="3.5 * 25.4" @update:model-value="setOrganizerLength(o, 'wall', $event)" /></v-col>
+                <v-col v-if="o.kind === 'blindTray'" cols="12">
+                  <v-switch :model-value="!!o.forward" label="It also comes forward, out of the door opening" color="primary" density="compact" hide-details data-test="blind-forward" @update:model-value="setBlindForward(o, !!$event)" />
                 </v-col>
-                <v-col cols="2"><v-btn :icon="mdiTrashCanOutline" variant="text" size="small" :aria-label="`Remove the ${organizerName(o).toLowerCase()}`" data-test="organizer-remove" @click="removeOrganizer(o.id)" /></v-col>
-                <template v-if="o.kind === 'pullOut' && o.bins">
-                  <v-col cols="6"><LengthField v-model="o.bins.width" label="A bin, across" /></v-col>
-                  <v-col cols="6"><LengthField v-model="o.bins.depth" label="A bin, front to back" /></v-col>
-                  <v-col cols="6"><LengthField v-model="o.bins.height" label="A bin, high" /></v-col>
-                  <v-col cols="6"><v-select v-model="o.bins.count" label="Bins, one behind another" :items="[1, 2]" hide-details /></v-col>
-                  <v-col cols="12"><LengthField :model-value="o.fromLeft ?? null" label="From the left side" optional hint="To its frame. Empty: as far left as the door opening lets it" @update:model-value="setOrganizerLength(o, 'fromLeft', $event)" /></v-col>
-                </template>
-                <template v-else-if="o.kind === 'narrow'">
-                  <v-col cols="6"><LengthField :model-value="o.width ?? null" label="How wide" optional hint="Outside. Empty: 6 in" @update:model-value="setOrganizerLength(o, 'width', $event)" /></v-col>
-                  <v-col cols="6"><LengthField :model-value="o.wall ?? null" label="Its walls" optional hint="Empty: 8 in" @update:model-value="setOrganizerLength(o, 'wall', $event)" /></v-col>
-                  <v-col cols="12"><LengthField :model-value="o.fromLeft ?? null" label="From the left side" optional hint="To its frame. Empty: as far left as the door opening lets it" @update:model-value="setOrganizerLength(o, 'fromLeft', $event)" /></v-col>
-                </template>
-                <template v-else-if="o.kind === 'dividers'">
-                  <v-col cols="6"><v-select v-model="o.count" label="Boards, the ends counted" :items="[2, 3, 4, 5, 6, 7, 8, 10, 12]" hide-details /></v-col>
-                  <v-col cols="6"><LengthField :model-value="o.height ?? null" label="How tall" optional @update:model-value="setOrganizerLength(o, 'height', $event)" /></v-col>
-                  <v-col cols="6"><LengthField :model-value="o.width ?? null" label="How wide" optional hint="Empty: the whole inside" @update:model-value="setOrganizerLength(o, 'width', $event)" /></v-col>
-                  <v-col cols="6"><LengthField :model-value="o.fromLeft ?? null" label="From the left side" optional hint="Empty: against it" @update:model-value="setOrganizerLength(o, 'fromLeft', $event)" /></v-col>
-                  <v-col cols="12"><LengthField :model-value="o.up ?? null" label="How high" optional hint="Its base, above the floor. Empty: on it" @update:model-value="setOrganizerLength(o, 'up', $event)" /></v-col>
-                </template>
-                <template v-else>
-                  <v-col cols="6"><LengthField :model-value="o.up ?? null" label="How high" optional :hint="o.kind === 'tray' ? 'Above the floor. Empty: on it' : 'Its top, above the floor'" @update:model-value="setOrganizerUp(o, $event)" /></v-col>
-                  <v-col v-if="o.kind === 'tray'" cols="6"><LengthField :model-value="o.wall ?? null" label="Its walls" optional hint="Empty: 3-1/2 in" @update:model-value="setOrganizerLength(o, 'wall', $event)" /></v-col>
-                  <v-col v-if="o.kind === 'blindTray'" cols="12">
-                    <v-switch
-                      :model-value="!!o.forward"
-                      label="It also comes forward, out of the door opening"
-                      color="primary"
-                      density="compact"
-                      :hint="o.forward ? 'On a platform: pulled across, then out to you. For the upper one, which clears the tray in front of the door; it comes across over whatever stands in that tray, so keep that low.' : ''"
-                      :persistent-hint="!!o.forward"
-                      :hide-details="!o.forward"
-                      data-test="blind-forward"
-                      @update:model-value="setBlindForward(o, !!$event)"
-                    />
-                  </v-col>
-                  <v-col v-if="o.kind === 'tray' && !(o.up && o.up.mm > 0)" cols="12">
-                    <v-select
-                      :model-value="o.slides ?? 'sides'"
-                      label="Its slides"
-                      :items="TRAY_SLIDES"
-                      :hint="o.slides === 'bottom' ? 'Bought, and dear: for where it earns its keep. Nothing stands beside the tray, so it is wider, and a blind corner tray can ride just over the slides.' : ''"
-                      :persistent-hint="o.slides === 'bottom'"
-                      :hide-details="o.slides !== 'bottom'"
-                      data-test="tray-slides"
-                      @update:model-value="setTraySlides(o, $event)"
-                    />
-                  </v-col>
-                </template>
-              </v-row>
+                <v-col v-if="o.kind === 'tray' && !(o.up && o.up.mm > 0)" cols="12">
+                  <v-select :model-value="o.slides ?? 'sides'" label="Its slides" :items="TRAY_SLIDES" hide-details density="compact" data-test="tray-slides" @update:model-value="setTraySlides(o, $event)" />
+                </v-col>
+              </template>
+            </v-row>
+          </div>
+          <v-menu>
+            <template #activator="{ props: menu }">
+              <v-btn v-bind="menu" size="small" variant="tonal" :prepend-icon="mdiPlus" class="mt-2" data-test="add-organizer">Add a tray, shelf or pull-out</v-btn>
+            </template>
+            <v-list density="compact">
+              <v-list-item v-for="a in organizerAdds" :key="a.test" :title="a.title" :data-test="`add-organizer-${a.test}`" @click="addOrganizerOpen(a.kind, a.tall)" />
+            </v-list>
+          </v-menu>
+          <v-select
+            v-if="cabinet.inside.organizers.some((o) => o.kind !== 'shelf')"
+            :model-value="trayMounting(cabinet)"
+            label="The trays' slides hang on"
+            :items="MOUNTINGS"
+            hide-details
+            density="compact"
+            class="mt-4"
+            data-test="sink-mounting"
+            @update:model-value="cabinet.inside.mounting = $event"
+          />
+
+          <!-- On the doors and behind a false front. -->
+          <SubHead>On the doors</SubHead>
+          <v-switch :model-value="!!cabinet.inside.doorRacks" label="Racks on the inside of the doors" color="primary" density="compact" hide-details data-test="racks-on" @update:model-value="setDoorRacks(!!$event)" />
+          <v-row v-if="cabinet.inside.doorRacks" density="compact">
+            <v-col cols="12"><v-select v-model="cabinet.inside.doorRacks.doors" label="Its doors" :items="RACK_DOORS" hide-details density="compact" data-test="racks-doors" /></v-col>
+            <v-col cols="6"><v-select v-model="cabinet.inside.doorRacks.count" label="Racks on each door" :items="[1, 2, 3]" hide-details density="compact" data-test="racks-count" /></v-col>
+            <v-col cols="6"><LengthField v-model="cabinet.inside.doorRacks.depth" label="How deep" /></v-col>
+            <v-col v-if="underSink?.doorRacks?.weight.heavy" cols="12">
+              <v-alert type="warning" variant="tonal" density="compact" data-test="racks-weight">{{ underSink.doorRacks.weight.words }}</v-alert>
             </v-col>
-            <v-col cols="12" class="d-flex flex-wrap ga-2 align-center">
-              <span class="text-body-2 text-medium-emphasis">Add:</span>
-              <v-btn size="small" variant="tonal" :prepend-icon="mdiPlus" data-test="add-organizer-tray" @click="addOrganizer('tray')">Tray</v-btn>
-              <v-btn size="small" variant="tonal" :prepend-icon="mdiPlus" data-test="add-organizer-tall" @click="addOrganizer('tray', true)">Tall tray for bottles</v-btn>
-              <v-btn size="small" variant="tonal" :prepend-icon="mdiPlus" data-test="add-organizer-shelf" @click="addOrganizer('shelf')">Shelf</v-btn>
-              <v-btn size="small" variant="tonal" :prepend-icon="mdiPlus" data-test="add-organizer-sideTrays" @click="addOrganizer('sideTrays')">Shelf with side trays</v-btn>
-              <v-btn size="small" variant="tonal" :prepend-icon="mdiPlus" data-test="add-organizer-pullOut" @click="addOrganizer('pullOut')">Trash pull-out</v-btn>
-              <v-btn size="small" variant="tonal" :prepend-icon="mdiPlus" data-test="add-organizer-narrow" @click="addOrganizer('narrow')">Narrow pull-out</v-btn>
-              <v-btn size="small" variant="tonal" :prepend-icon="mdiPlus" data-test="add-organizer-dividers" @click="addOrganizer('dividers')">Dividers</v-btn>
-              <v-btn v-if="cabinet.corner?.kind === 'blind'" size="small" variant="tonal" :prepend-icon="mdiPlus" data-test="add-organizer-blindTray" @click="addOrganizer('blindTray')">Blind corner tray</v-btn>
-            </v-col>
-            <!-- On a case made here the tray goes with the false front, on the drawer over the doors (Fronts). -->
-            <v-col v-if="!existing && !cabinet.inside.tiltOut" cols="12" class="text-body-2 text-medium-emphasis" data-test="tilt-on-front">
-              A tilt-out tray goes behind a false front: make the drawer over the doors a false front that tips out, under Fronts.
-            </v-col>
-            <v-col v-if="existing || cabinet.inside.tiltOut" cols="12">
-              <v-switch :model-value="!!cabinet.inside.tiltOut" label="A tilt-out tray behind the false front" color="primary" density="compact" hide-details data-test="tilt-on" @update:model-value="setTiltOut(!!$event)" />
-            </v-col>
-            <template v-if="cabinet.inside.tiltOut">
+          </v-row>
+          <template v-if="existing || cabinet.inside.tiltOut">
+            <v-switch :model-value="!!cabinet.inside.tiltOut" label="A tilt-out tray behind the false front" color="primary" density="compact" hide-details data-test="tilt-on" @update:model-value="setTiltOut(!!$event)" />
+            <v-row v-if="cabinet.inside.tiltOut" density="compact">
               <v-col cols="4"><LengthField v-model="cabinet.inside.tiltOut.width" label="Opening, wide" /></v-col>
               <v-col cols="4"><LengthField v-model="cabinet.inside.tiltOut.height" label="Opening, high" /></v-col>
               <v-col cols="4"><LengthField v-model="cabinet.inside.tiltOut.depth" label="Tray, deep" /></v-col>
-              <v-col cols="12" class="text-body-2 text-medium-emphasis" data-test="tilt-words">
-                Measure the opening behind the false front over the doors. Only the tray is made<template v-if="underSink?.tiltOut"
-                  >, {{ L(underSink.tiltOut.width) }} wide × {{ L(underSink.tiltOut.height) }} high × {{ L(underSink.tiltOut.depth) }} deep</template
-                >: the false front is the cabinet's own, taken off and hung on a pair of tilt-out hinges, which are bought.
-              </v-col>
-            </template>
-            <v-col cols="12">
-              <v-switch :model-value="!!cabinet.inside.doorRacks" label="Racks on the inside of the doors" color="primary" density="compact" hide-details data-test="racks-on" @update:model-value="setDoorRacks(!!$event)" />
-            </v-col>
-            <template v-if="cabinet.inside.doorRacks">
-              <v-col cols="12"><v-select v-model="cabinet.inside.doorRacks.doors" label="Its doors" :items="RACK_DOORS" hide-details data-test="racks-doors" /></v-col>
-              <v-col cols="6"><v-select v-model="cabinet.inside.doorRacks.count" label="Racks on each door" :items="[1, 2, 3]" hide-details data-test="racks-count" /></v-col>
-              <v-col cols="6"><LengthField v-model="cabinet.inside.doorRacks.depth" label="How deep" /></v-col>
-              <v-col v-if="underSink?.doorRacks" cols="12" class="text-body-2 text-medium-emphasis" data-test="racks-words">
-                Each rack is {{ L(underSink.doorRacks.racks[0]!.width) }} wide × {{ L(underSink.doorRacks.racks[0]!.depth) }} deep × {{ L(underSink.doorRacks.racks[0]!.height) }} high, narrower than
-                its door so that it swings clear. Shut, the racks stand {{ L(underSink.doorRacks.reach) }} into the cabinet: the trays and shelves start behind them.
-                <v-alert :type="underSink.doorRacks.weight.heavy ? 'warning' : 'info'" variant="tonal" density="compact" class="mt-2" data-test="racks-weight">{{ underSink.doorRacks.weight.words }}</v-alert>
-              </v-col>
-            </template>
-            <v-col v-if="sinkError" cols="12">
-              <v-alert type="warning" variant="tonal" density="compact" data-test="sink-error">{{ sinkError }}</v-alert>
-            </v-col>
-            <v-col v-if="cabinet.inside.organizers.some((o) => o.kind !== 'shelf')" cols="12">
-              <v-select :model-value="trayMounting(cabinet)" label="The trays' slides hang on" :items="MOUNTINGS" hide-details data-test="sink-mounting" @update:model-value="cabinet.inside.mounting = $event" />
-            </v-col>
-            <v-col v-if="underSink?.trays.length" cols="12" class="text-body-2 text-medium-emphasis" data-test="sink-words">
-              <div v-for="tray in underSink.trays" :key="tray.name">
+            </v-row>
+          </template>
+          <div v-else class="text-body-2 text-medium-emphasis mt-2" data-test="tilt-on-front">A tilt-out tray goes behind a false front: make the drawer over the doors one that tips out, under Fronts.</div>
+
+          <!-- What needs a look, and what to print. -->
+          <v-alert v-if="sinkError" type="warning" variant="tonal" density="compact" class="mt-4" data-test="sink-error">{{ sinkError }}</v-alert>
+          <v-alert v-for="way in wayIn.filter((w) => w.how === 'no')" :key="way.what" type="warning" variant="tonal" density="compact" class="mt-2" data-test="way-in-no">{{ way.words }}</v-alert>
+          <v-alert v-if="cabinet.adjustableShelves > 0" type="warning" variant="tonal" density="compact" class="mt-2" data-test="sink-shelves">
+            The adjustable shelves run the full depth, into what is in the way: set them to 0, or notch them by hand.
+          </v-alert>
+          <div v-if="underSink?.templates.length" class="mt-4">
+            <v-btn size="small" variant="tonal" color="primary" data-test="print-templates" @click="printTemplates">Print the paper templates</v-btn>
+          </div>
+
+          <HelpText>
+            <p>
+              What is in the way is measured as blocks: the trap and the drain, the bowl, the supply valves, a disposal. They are drawn grey
+              and never cut; what is made is cut round them. "From the left side" is from the inside of the cabinet's left side to the block's
+              left edge, "Clear under it" from the cabinet's floor to its lowest point.<template v-if="cabinet.sink"> The sink's own bowl is in
+              the way too, from its sizes: a block with no height of its own stops under it.</template>
+            </p>
+            <p v-if="underSink?.trays.length" data-test="sink-words">
+              <template v-for="tray in underSink.trays" :key="tray.name">
                 {{ tray.name }}: {{ L(tray.width) }} wide × {{ L(tray.length) }} deep × {{ L(tray.height) }} high outside ({{ L(tray.inside.width) }} × {{ L(tray.inside.length) }} inside)<template v-if="tray.round">, cut round {{ tray.round }}</template
                 ><template v-if="tray.stopsAt">, made short to stop in front of {{ tray.stopsAt }}</template>.
-              </div>
-              <div>
-                <router-link to="/jigs?item=tray-bins" class="text-primary" data-test="tray-bins-link">Printed bins</router-link> and
-                <router-link to="/jigs?item=tray-divider" class="text-primary">a printed divider</router-link> sized to a tray's inside are on the jigs page.
-              </div>
-              <div v-if="underSink.mounting === 'strips'">
+              </template>
+              <template v-if="underSink.mounting === 'strips'">
                 Drawer boxes with no front, on {{ underSink.slides ? underSink.slides.lengths.map((u) => L(u.length.mm)).join(' and ') : '' }} slides hung on build-out strips on the case sides
                 ({{ underSink.buildOutLayers === 1 ? 'one layer' : `${underSink.buildOutLayers} layers` }} of the case material), clear of the hinges.
-              </div>
-              <div v-else>
+              </template>
+              <template v-else>
                 Drawer boxes with no front, on {{ underSink.slides ? underSink.slides.lengths.map((u) => L(u.length.mm)).join(' and ') : '' }} slides<template v-if="underSink.frame">
                   hung on a frame {{ L(underSink.frame.width) }} wide × {{ L(underSink.frame.depth) }} deep × {{ L(underSink.frame.height) }} high: two standards on two rails, squared on the
                   bench and screwed to the cabinet's floor. It touches neither side and goes in through the door opening; the trays roll over its rails<template v-if="underSink.trays.length > 1"
                     >{{ underSink.frame.tie ? ', and a tie at the back keeps its standards upright' : '. There is no room for a tie at the back: fasten the top of each standard to the cabinet\'s side with a block' }}</template
                   >.</template
                 ><template v-else>{{ cabinet.inside.organizers.some((o) => o.kind === 'sideTrays') ? ' hung on standards screwed to the shelf.' : ', each on a frame of its own.' }}</template>
-              </div>
-            </v-col>
-            <v-col v-if="wayIn.length" cols="12" class="text-body-2 text-medium-emphasis" data-test="way-in">
-              <div class="font-weight-bold">Through the door opening{{ existing ? ', round what is in the way' : '' }}</div>
-              <template v-for="way in wayIn" :key="way.what">
-                <v-alert v-if="way.how === 'no'" type="warning" variant="tonal" density="compact" class="my-1" data-test="way-in-no">{{ way.words }}</v-alert>
-                <div v-else>{{ way.words }}</div>
               </template>
-            </v-col>
-            <v-col v-if="underSink?.templates.length" cols="12" class="text-body-2 text-medium-emphasis" data-test="sink-templates">
-              <v-btn size="small" variant="tonal" color="primary" class="mr-2" data-test="print-templates" @click="printTemplates">Print the paper templates</v-btn>
-              {{ underSink.templates.length === 1 ? 'The notch' : `The ${underSink.templates.length} notches` }} at real size, to cut out with scissors and hold against the plumbing before any plywood is cut.
-            </v-col>
-            <v-col v-if="underSink?.jigHeights.length" cols="12" class="text-body-2 text-medium-emphasis" data-test="sink-jigs">
+              <router-link to="/jigs?item=tray-bins" class="text-primary" data-test="tray-bins-link">Printed bins</router-link> and
+              <router-link to="/jigs?item=tray-divider" class="text-primary">a printed divider</router-link> sized to a tray's inside are on the jigs page.
+            </p>
+            <p v-if="wayIn.some((w) => w.how !== 'no')" data-test="way-in">
+              Through the door opening{{ existing ? ', round what is in the way' : '' }}: <template v-for="way in wayIn.filter((w) => w.how !== 'no')" :key="way.what">{{ way.words }} </template>
+            </p>
+            <p v-if="underSink?.doorRacks" data-test="racks-words">
+              Each rack is {{ L(underSink.doorRacks.racks[0]!.width) }} wide × {{ L(underSink.doorRacks.racks[0]!.depth) }} deep × {{ L(underSink.doorRacks.racks[0]!.height) }} high, narrower than
+              its door so that it swings clear. Shut, the racks stand {{ L(underSink.doorRacks.reach) }} into the cabinet: the trays and shelves start behind them.
+              <template v-if="!underSink.doorRacks.weight.heavy">{{ underSink.doorRacks.weight.words }}</template>
+            </p>
+            <p v-if="cabinet.inside.tiltOut" data-test="tilt-words">
+              Measure the opening behind the false front over the doors. Only the tray is made<template v-if="underSink?.tiltOut"
+                >, {{ L(underSink.tiltOut.width) }} wide × {{ L(underSink.tiltOut.height) }} high × {{ L(underSink.tiltOut.depth) }} deep</template
+              >: the false front is the cabinet's own, taken off and hung on a pair of tilt-out hinges, which are bought.
+            </p>
+            <p v-if="underSink?.templates.length" data-test="sink-templates">
+              The paper templates: {{ underSink.templates.length === 1 ? 'the notch' : `the ${underSink.templates.length} notches` }} at real size, to cut out with scissors and hold against the plumbing before any plywood is cut.
+            </p>
+            <p v-if="underSink?.jigHeights.length" data-test="sink-jigs">
               A pair of printed stands holds each build-out strip level while it is screwed on ({{ underSink.jigHeights.map((h) => L(h)).join(' and ') }} high): the file is with Cut's 3D prints.
-            </v-col>
-            <v-col v-if="cabinet.adjustableShelves > 0" cols="12">
-              <v-alert type="warning" variant="tonal" density="compact" data-test="sink-shelves">
-                The adjustable shelves run the full depth, into what is in the way: set them to 0, or notch them by hand.
-              </v-alert>
-            </v-col>
-          </template>
-        </v-row>
+            </p>
+          </HelpText>
+        </template>
       </div>
 
       <!-- The fronts: a set of doors or a drawer at a time, the one in hand on the rail's second level. -->
@@ -2862,6 +2909,27 @@ function notes(part: Part): string[] {
   background: rgba(255, 167, 38, 0.16);
 }
 /* The list scrolls in its own box, so the view above it stays in sight. */
+/* The Inside topic's lists: each block or thing made one line that opens to its fields. */
+.item {
+  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+.item-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  cursor: pointer;
+}
+.item-summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.item-fields {
+  padding: 4px 0 12px 26px;
+}
 .parts-box {
   max-height: 280px;
   overflow-y: auto;

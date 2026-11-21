@@ -26,6 +26,8 @@ const props = withDefaults(
     plain?: boolean;
     /** What an empty field stands for, in mm: shown faintly in the unit of the field. */
     placeholderMm?: number;
+    /** What an empty field stands for, in words ("in the middle"): shown faintly in it, in place of a hint under it. */
+    emptyText?: string;
   }>(),
   { defaultUnit: 'in' },
 );
@@ -43,7 +45,7 @@ watch(
   },
 );
 const hintText = computed(() => [props.tuneMe ? 'Placeholder: tune me' : '', props.hint ?? ''].filter(Boolean).join(' · '));
-const placeholder = computed(() => (props.placeholderMm === undefined ? undefined : lengthText(props.placeholderMm, unit.value).text));
+const placeholder = computed(() => (props.placeholderMm !== undefined ? lengthText(props.placeholderMm, unit.value).text : props.emptyText));
 watch(shown, (s) => {
   text.value = s.text;
   error.value = '';
