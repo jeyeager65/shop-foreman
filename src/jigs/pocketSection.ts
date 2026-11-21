@@ -89,11 +89,15 @@ export function pocketSection(thickness: Mm, angleDeg: number, seatFromEdge: Mm 
   return { thickness, angleDeg, seat, screw, screwKind: low ? 'castle' : 'kreg', fine: !low && hardwood, pocket, channel, into, short: into < POCKET_SCREW.leastInto - 0.5, through: into * cos > thickness + 0.5 };
 }
 
-/** A length in inches to the 1/16", "≈" in front when it is not exact (no 32nds to think in). */
+/**
+ * A length in inches: to the 1/32" under 1/2", where a 16th is a big step, and to the 1/16" from there up (no 32nds to
+ * think in); "≈" in front when it is not exact.
+ */
 export function inchesBy16(mm: Mm): string {
-  const sixteenths = (mm / MM_PER_INCH) * 16;
-  const exact = Math.abs(sixteenths - Math.round(sixteenths)) < 0.02;
-  return `${exact ? '' : '≈'}${formatLength(mm, { kind: 'fractionalInch', denominator: 16 })}`;
+  const denominator = Math.abs(mm) < MM_PER_INCH / 2 ? 32 : 16;
+  const steps = (mm / MM_PER_INCH) * denominator;
+  const exact = Math.abs(mm - (Math.round(steps) * MM_PER_INCH) / denominator) < 0.025;
+  return `${exact ? '' : '≈'}${formatLength(mm, { kind: 'fractionalInch', denominator })}`;
 }
 
 /** A length in mm to the tenth. */

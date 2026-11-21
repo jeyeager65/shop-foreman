@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { LOW_POCKET, POCKET } from '@/geometry/pocketHole';
 import { jigItems } from '@/jigs/catalog';
-import { POCKET_SCREW, farthestSeat, pocketSection } from '@/jigs/pocketSection';
+import { POCKET_SCREW, bothUnits, farthestSeat, inchesBy16, pocketSection } from '@/jigs/pocketSection';
 import { createStarterShopProfile } from '@/libraries';
 import { MM_PER_INCH } from '@/units';
 
@@ -43,5 +43,15 @@ describe('a pocket in section', () => {
     // And the page draws each kind once.
     const values = { ...test.defaults, bit: 'endmill-1-8', pockets: JSON.stringify([{ angle: '3' }, { angle: '15' }, { angle: '15' }]) };
     expect(test.sections!(values).map((s) => s.title)).toEqual(['Pocket 1', 'Pockets 2 and 3']);
+  });
+});
+
+describe('a length in both units', () => {
+  it('gives inches to the 1/32" under 1/2", to the 1/16" from there, marked when not exact', () => {
+    expect(inchesBy16(4)).toBe('≈5/32"');
+    expect(inchesBy16(15.875)).toBe('5/8"');
+    expect(inchesBy16(13.69)).toBe('≈9/16"');
+    expect(bothUnits(22.225, { kind: 'mm', places: 2 })).toBe('22.2 mm (7/8")');
+    expect(bothUnits(38.1, { kind: 'fractionalInch', denominator: 32 })).toBe('1-1/2" (38.1 mm)');
   });
 });

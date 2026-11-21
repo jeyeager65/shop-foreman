@@ -75,7 +75,7 @@ describe('a screw channel', () => {
     const [file] = test.gcode!(values, 1, profile.activeMachineId);
     expect(file!.text).toContain('screw channel');
     expect(file!.note).toContain('nothing to drill');
-    expect(test.help!(values).join(' ')).toMatch(/the screw's way a channel 4 mm \(≈3\/16"\) wide, cut open from the face/);
+    expect(test.help!(values).join(' ')).toMatch(/the screw's way a channel 4 mm \(≈5\/32"\) wide, cut open from the face/);
     // With the ball nose, the channel is cut with it too, straight after the pockets: one bit, no change.
     expect(file!.note).toContain('cut with 1/8" ball nose;');
   });
