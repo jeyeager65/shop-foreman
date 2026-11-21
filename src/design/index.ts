@@ -4,6 +4,7 @@ import { withMaterialSettings, projectMachineId, toolsOnMachine } from '@/librar
 import { deriveCaseParts, kickBoardHeight, kickBoardOutline } from './case';
 import { deriveUnderSink } from './underSink';
 import { falseFrontParts, falseFrontTilt } from './falseFront';
+import { farmhouseParts, withoutApronMembers } from './farmhouse';
 import { deriveSusan } from './susan';
 import { boxOf, shiftedParts } from './style';
 import { edgeStripParts } from './edgeStrips';
@@ -83,6 +84,7 @@ export * from './doorRacks';
 export * from './underSink';
 export * from './falseFront';
 export * from './sinks';
+export * from './farmhouse';
 export * from './pattern';
 export * from './patternLooks';
 export * from './tileDrawings';
@@ -141,8 +143,9 @@ export function mountedDesigns(project: Project, materials: Material[]): DesignO
     const cabinet = cabinets.find((c) => c.id === o.cabinetId);
     return !!cabinet?.existing && existingRowFronts(cabinet.existing, cabinet.layout.rows.findIndex((r) => r.id === o.rowId)) === 'kept';
   };
-  // An open row has nothing hung on it: its door set is kept the same way, to come back with the doors.
-  const ids = new Set(cabinetOpeningsOf(project, materials).filter((o) => !kept(o) && !o.open).map((o) => o.id));
+  // An open row has nothing hung on it: its door set is kept the same way, to come back with the doors. Nor has the top
+  // row where a farmhouse sink's apron stands.
+  const ids = new Set(cabinetOpeningsOf(project, materials).filter((o) => !kept(o) && !o.open && !o.apron).map((o) => o.id));
   return designsOf(project).filter((d) => ids.has(d.mounting.openingId));
 }
 
@@ -487,7 +490,9 @@ export function deriveCabinetParts(project: Project, shop: Shop): Part[] {
     const boxShare = share && shift ? { ...share, holes: share.holes.map((h) => (h.kind === 'hole' ? { ...h, center: { ...h.center, x: h.center.x - shift } } : h)) } : share;
     return [
     // (Between corner posts the box's back members run on to the posts' rear faces, and the back stands between the posts.)
-    ...postsBack([...shiftedParts(boxCase(box, boxShare), shift), ...deriveFaceFrameParts(cabinet, shop.materials)], cabinet, shop.materials),
+    // (A farmhouse sink takes the place of the front stretcher and the top rail, and stands on a platform of its own.)
+    ...withoutApronMembers(postsBack([...shiftedParts(boxCase(box, boxShare), shift), ...deriveFaceFrameParts(cabinet, shop.materials)], cabinet, shop.materials), cabinet),
+    ...farmhouseParts(cabinet, shop.materials),
     // Posts at its corners, from the floor to its top.
     ...(onLegs(cabinet) ? postParts(cabinet, shop.materials) : []),
     ...fillerParts(project, cabinet, shop.materials),

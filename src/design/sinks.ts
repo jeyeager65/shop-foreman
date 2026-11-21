@@ -57,12 +57,20 @@ export function newSink(cabinet: Pick<CabinetDesign, 'size'>): CabinetSink {
   return { mount: 'dropIn', width: { mm: width, unit: 'in' }, depth: len('22"'), bowlDepth: len('9"'), shape: 'rectangle' };
 }
 
+/** Tune me: a farmhouse sink's apron to start: as tall as the sink is, its face this far in front of the doors' faces. */
+export const FARMHOUSE = { height: 10 * IN, proud: 0.25 * IN, depth: 20 * IN, bowl: 9 * IN };
+
 /**
  * A sink of a kind for a cabinet, as Design starts it when the kind is chosen: a vessel a 16" round bowl 5" deep; a
- * bought top with its sink as big as the case and its overhang; the others as `newSink`, of that kind. Tune me.
+ * bought top with its sink as big as the case and its overhang; a farmhouse sink 20" front to back, 10" tall at its
+ * apron, 9" deep inside, as wide as the cabinet less 3" (33" at most); the others as `newSink`, of that kind. Tune me.
  */
 export function sinkOfKind(cabinet: Pick<CabinetDesign, 'size'>, mount: SinkMount, front: Mm = SINK.frontGuess - SINK.integratedOver.front): CabinetSink {
   if (mount === 'vessel') return { mount, width: len('16"'), depth: len('16"'), bowlDepth: len('5"'), shape: 'oval' };
+  if (mount === 'farmhouse') {
+    const width = Math.min(33 * IN, cabinet.size.width.mm - 3 * IN);
+    return { mount, width: { mm: width, unit: 'in' }, depth: { mm: FARMHOUSE.depth, unit: 'in' }, bowlDepth: { mm: FARMHOUSE.bowl, unit: 'in' }, shape: 'rectangle', apron: { height: { mm: FARMHOUSE.height, unit: 'in' }, proud: { mm: FARMHOUSE.proud, unit: 'in' } } };
+  }
   if (mount === 'integrated') {
     const width = cabinet.size.width.mm + 2 * SINK.integratedOver.side;
     const depth = cabinet.size.depth.mm + front + SINK.integratedOver.front;
@@ -172,6 +180,8 @@ export function faucetWords(sink: Pick<CabinetSink, 'faucet' | 'depth'>, length:
  */
 export function sinkCentre(cabinet: Pick<CabinetDesign, 'size' | 'sink'>, front: Mm = SINK.frontGuess): [Mm, Mm] {
   const sink = cabinet.sink;
+  // A farmhouse sink stands with its apron in front: `front` is then where its apron's face is.
+  if (sink?.mount === 'farmhouse') return [cabinet.size.width.mm / 2 + (sink.offset?.mm ?? 0), front - sink.depth.mm / 2];
   const centred = (front - cabinet.size.depth.mm) / 2;
   const behind = sink && holesInTop(sink) ? (sink.mount === 'vessel' ? 2 * IN : SINK.faucetBehind) + SINK.faucetHole / 2 + IN : 0;
   const least = sink ? -cabinet.size.depth.mm + behind + sink.depth.mm / 2 : centred;
@@ -189,9 +199,10 @@ export function sinkBowlBlock(cabinet: Pick<CabinetDesign, 'size' | 'sink'>): { 
   const [cx, cz] = sinkCentre(cabinet);
   const inset = sink.mount === 'dropIn' || sink.mount === 'integrated' ? sinkInset({ mount: 'dropIn' }) : 0;
   const [w, d] = [sink.width.mm - 2 * inset, sink.depth.mm - 2 * inset];
-  // The rim of a drop-in or an integrated top lies on the top; an undermount or a farmhouse sink hangs under it.
+  // The rim of a drop-in or an integrated top lies on the top; an undermount hangs under it; a farmhouse sink stands
+  // on its platform, its body from there up.
   const rimAt = cabinet.size.height.mm + (sink.mount === 'dropIn' || sink.mount === 'integrated' ? SINK.topGuess : 0);
-  const bottom = rimAt - sink.bowlDepth.mm;
+  const bottom = sink.mount === 'farmhouse' ? farmhouseFloor(cabinet) : rimAt - sink.bowlDepth.mm;
   return { min: [cx - w / 2, bottom, cz - d / 2], max: [cx + w / 2, cabinet.size.height.mm, Math.min(0, cz + d / 2)] };
 }
 
@@ -225,9 +236,36 @@ export function sinkLook(sink: CabinetSink, topThick: Mm): SinkLook {
   const bowls = loops.map((loop) => {
     const xs = loop.map((p) => p[0]);
     const zs = loop.map((p) => p[1]);
-    return { cx: W / 2 + (Math.min(...xs) + Math.max(...xs)) / 2, cy: D / 2 - (Math.min(...zs) + Math.max(...zs)) / 2, width: Math.max(...xs) - Math.min(...xs), depth: Math.max(...zs) - Math.min(...zs), top: T - topThick, floor: 0 };
+    return { cx: W / 2 + (Math.min(...xs) + Math.max(...xs)) / 2, cy: D / 2 - (Math.min(...zs) + Math.max(...zs)) / 2, width: Math.max(...xs) - Math.min(...xs), depth: Math.max(...zs) - Math.min(...zs), top: sink.mount === 'farmhouse' ? T : T - topThick, floor: 0 };
   });
-  return { colour, shape: sink.shape, bowls, faucet: faucet(D + SINK.faucetBehind, T) };
+  // A farmhouse sink's apron: its front, from its top edge down the whole sink's height.
+  const apron = sink.mount === 'farmhouse' ? { apron: { width: W, height: apronOf(sink).height, z: T } } : {};
+  return { colour, shape: sink.shape, bowls, ...apron, faucet: faucet(D + SINK.faucetBehind, T) };
+}
+
+/** A farmhouse sink's apron: its own, else the start's. */
+export function apronOf(sink: Pick<CabinetSink, 'apron'>): { height: Mm; proud: Mm } {
+  return { height: sink.apron?.height.mm ?? FARMHOUSE.height, proud: sink.apron?.proud.mm ?? FARMHOUSE.proud };
+}
+
+/** Whether a cabinet's top row is a farmhouse sink's apron: the sink is one, over a drawer row over doors, on a case made here. */
+export function farmhouseRow(cabinet: Pick<CabinetDesign, 'sink' | 'form' | 'existing' | 'layout'>): boolean {
+  const rows = cabinet.layout.rows;
+  return cabinet.sink?.mount === 'farmhouse' && cabinet.form === 'base' && !cabinet.existing && rows[0]?.use === 'drawer' && rows[1]?.use === 'doors' && !(rows[0].split && rows[0].split > 1);
+}
+
+/**
+ * How tall the top row is under a farmhouse sink's apron: from where the sink stands (the top's surface, a guess at its
+ * thickness over the case, less the sink's height) up to the top of the openings (`openingsTop`). 2" at the least.
+ */
+export function apronRowHeight(cabinet: Pick<CabinetDesign, 'size' | 'sink'>, openingsTop: Mm): Mm {
+  const { height } = apronOf(cabinet.sink ?? {});
+  return Math.max(2 * IN, height - SINK.topGuess - (cabinet.size.height.mm - openingsTop));
+}
+
+/** Where a farmhouse sink stands in its cabinet: the top of the platform it sits on, above the floor (the top's thickness a guess). */
+export function farmhouseFloor(cabinet: Pick<CabinetDesign, 'size' | 'sink'>): Mm {
+  return cabinet.size.height.mm + SINK.topGuess - apronOf(cabinet.sink ?? {}).height;
 }
 
 /** A bought top with its sink in it is drawn white (cultured marble): its part's id, and its colour. */

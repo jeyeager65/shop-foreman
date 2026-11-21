@@ -1,5 +1,5 @@
 import { batchInHand, batchWants } from './batch';
-import { FRAME_DOWELS, SEATING, seatingBrackets, frameLeafOf, frameTop, backAgainstWall, dropLeafHinges, dropLeafSupport, leafEdgeWords, leafSidesWords, boxOf, postsOf, POST_SETBACK, legFrameMiddles, piecesOf, towerSpans, onLegs, framesOf, frameFasteners, frameLayout, clearCoatOf, coatsWords, finishSteps, finishesOf, casterGroups, CASTER_INSET, susanOf, sinkCuts, SINK, faucetSpread, topPieces, topSettingsOf, cabinetIdOf, cabinetTags, cabinetsOf, copiesOf, designsOf, runFit, tagged, deriveWayIn } from '@/design';
+import { FRAME_DOWELS, SEATING, seatingBrackets, frameLeafOf, frameTop, backAgainstWall, dropLeafHinges, dropLeafSupport, leafEdgeWords, leafSidesWords, boxOf, postsOf, POST_SETBACK, legFrameMiddles, piecesOf, towerSpans, onLegs, framesOf, frameFasteners, frameLayout, clearCoatOf, coatsWords, finishSteps, finishesOf, casterGroups, CASTER_INSET, susanOf, sinkCuts, SINK, FARMHOUSE_FRAME, farmhouseWords, faucetSpread, topPieces, topSettingsOf, cabinetIdOf, cabinetTags, cabinetsOf, copiesOf, designsOf, runFit, tagged, deriveWayIn } from '@/design';
 import { hubOf } from '@/design/hub';
 import { JOIN_SCREWS } from './lists';
 import { jigSleeve, sleeveGoesIn, sleeveWords } from '@/geometry/pocketHole';
@@ -600,7 +600,15 @@ export function buildChecklistSections(
       const opening = sink.mount === 'vessel' ? `the drain hole for the ${name} (${show(SINK.drain)} across)` : `the opening${cut.outlines.length > 1 ? 's' : ''} for the ${name} (${size}${cut.outlines.length > 1 ? ', one for each bowl' : ''})`;
       const kind = cut.piece.settings.kind;
       const onCnc = kind === 'made' && (plan.parts.find((x) => x.partId === cut.piece.id)?.cutOut ?? 'cnc') === 'cnc';
-      if (kind === 'measured') say(`Give the supplier the ${name}'s own template for its opening (about ${size})${sink.mount === 'undermount' ? ', and say it is an undermount: the edge is polished' : ''}.`);
+      const farmhouse = cut.notch && cabinetsOf(project).find((c) => c.id === cut.cabinetId);
+      if (farmhouse) {
+        // Before the top: the sink stands on its platform, and the top is notched round it.
+        const notch = `${show(cut.notch!.x1 - cut.notch!.x0)} wide and ${show(cut.piece.zFront - cut.notch!.zBack)} back from the front edge`;
+        say(`Before the top goes on: glue and screw the sink platform's cleats to the sides, and the platform onto them (and its rails under it, where there are some). Set ${farmhouseWords(farmhouse, show)}, on the platform, level, its top edge level with where the top's surface will be: shim it there. Full of water it weighs about ${FARMHOUSE_FRAME.weight}.`);
+        if (kind === 'measured') say(`Give the supplier the notch round the ${name}: ${notch}, its edge polished.`);
+        else if (onCnc) say(`The CNC cuts the notch round the ${name} (${notch}) with the top's outline: check it against the sink as it stands before cutting.`);
+        else say(`Cut the notch round the ${name} by hand: ${notch}, marked from the sink as it stands.`);
+      } else if (kind === 'measured') say(`Give the supplier the ${name}'s own template for its opening (about ${size})${sink.mount === 'undermount' ? ', and say it is an undermount: the edge is polished' : ''}.`);
       else if (onCnc) say(`The CNC cuts ${opening} with its top: check that size against the sink's own template before cutting. Seal the opening's raw edges.`);
       else if (sink.mount === 'vessel') say(`Drill ${opening} by hand with a hole saw, where the vessel's drain stands.`);
       else say(`Cut the opening${cut.outlines.length > 1 ? 's' : ''} for the ${name} by hand: ${size}${cut.outlines.length > 1 ? ' over both, one for each bowl' : ''}, centred front to back, marked from the sink's own template. Drill the corners, cut between them with a jigsaw from the top face, and support the waste so it does not tear out as it drops.`);
@@ -614,6 +622,7 @@ export function buildChecklistSections(
       if (sink.mount === 'dropIn') say(`Set the ${name} in a bead of sealant and clamp it from below with its clips.`);
       else if (sink.mount === 'undermount') say(`Before the top goes on: turn it over, set the ${name} under its opening${cut.outlines.length > 1 ? 's' : ''} in a bead of silicone, centred on them, and fix it with its clips. Ease and seal the opening's edge, which shows.`);
       else if (sink.mount === 'vessel') say(`Set the ${name} on its drain over the hole, in a bead of silicone, and tighten the drain from below.`);
+      else if (farmhouse) say(`Set the top round the ${name}, and seal the joint between them with silicone.`);
     }
     // A bought top with its sink in it: set on the cabinet in place of a top.
     for (const cabinet of integrated) {

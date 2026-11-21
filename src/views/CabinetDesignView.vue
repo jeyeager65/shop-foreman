@@ -108,6 +108,9 @@ import {
   SINK_MOUNTS,
   newSink,
   sinkOfKind,
+  FARMHOUSE,
+  apronOf,
+  farmhouseRow,
   faucetSpread,
   holesInTop,
   sinkProblems,
@@ -749,14 +752,16 @@ const setCabinetSink = (on: boolean) => {
   if (on) cabinet.value.sink = newSink(cabinet.value);
   else delete cabinet.value.sink;
 };
-/** The kinds offered: all but a farmhouse sink, which is a kitchen's (and the kind the sink is). */
-const sinkMounts = computed(() => SINK_MOUNTS.filter((m) => m.value !== 'farmhouse' || m.value === cabinet.value.sink?.mount));
+/** The kinds offered: every one. */
+const sinkMounts = computed(() => SINK_MOUNTS);
 /** Another kind: its sizes start again as that kind's; where it sits and its faucet stay. */
 const setSinkMount = (mount: SinkMount) => {
   const now = cabinet.value.sink;
   if (!now || now.mount === mount) return;
   const next = sinkOfKind(cabinet.value, mount);
   cabinet.value.sink = { ...next, ...(now.offset ? { offset: now.offset } : {}), ...(now.faucet && mount !== 'integrated' ? { faucet: now.faucet } : {}) };
+  // A farmhouse sink's apron takes the top row of a drawer over doors: a cabinet without one is given that layout.
+  if (mount === 'farmhouse' && !farmhouseRow(cabinet.value)) applyCabinetLayout(store.project!, cabinet.value, 'drawerOverDoors');
 };
 const SINK_SHAPES = [
   { title: 'Square or rectangle', value: 'rectangle' },
@@ -779,6 +784,13 @@ const setSinkOffset = (value: Length | null) => {
   if (!sink) return;
   if (value && Math.abs(value.mm) > 0.01) sink.offset = value;
   else delete sink.offset;
+};
+/** A farmhouse sink's apron: its height and how far it stands in front of the doors. */
+const setApron = (key: 'height' | 'proud', value: Length | null) => {
+  const sink = cabinet.value.sink;
+  if (!sink || !value) return;
+  const now = apronOf(sink);
+  sink.apron = { height: { mm: now.height, unit: 'in' }, proud: { mm: now.proud, unit: 'in' }, ...sink.apron, [key]: value };
 };
 const FAUCETS = [
   { title: 'None (on the wall, or fitted later)', value: 'none' },
@@ -1065,7 +1077,8 @@ function addDoors(opening: CabinetOpening) {
 /** The drawer openings, each with the drawer on it if there is one. */
 const drawerRows = computed(() =>
   derived.value.openings
-    .filter((o) => o.use === 'drawer')
+    // (A farmhouse sink's apron takes the top row's place: no front is hung there.)
+    .filter((o) => o.use === 'drawer' && !o.apron)
     .filter((o) => !existing.value || existingRowFronts(existing.value, cabinet.value.layout.rows.findIndex((r) => r.id === o.rowId)) === 'new')
     .map((opening) => ({ opening, drawer: designsOf(store.project!).filter(isDrawer).find((d) => d.mounting.openingId === opening.id) })),
 );
@@ -2265,6 +2278,10 @@ function notes(part: Part): string[] {
             <v-col cols="4"><LengthField v-model="cabinet.sink.depth" label="Front to back" /></v-col>
             <v-col cols="4"><LengthField v-model="cabinet.sink.bowlDepth" label="Bowl depth" /></v-col>
             <v-col cols="6"><LengthField :model-value="cabinet.sink.offset ?? len('0')" label="Right of centre" data-test="sink-offset" @update:model-value="setSinkOffset" /></v-col>
+            <template v-if="cabinet.sink.mount === 'farmhouse'">
+              <v-col cols="6"><LengthField :model-value="cabinet.sink.apron?.height ?? { mm: FARMHOUSE.height, unit: 'in' }" label="Apron, tall" data-test="sink-apron-height" @update:model-value="setApron('height', $event)" /></v-col>
+              <v-col cols="6"><LengthField :model-value="cabinet.sink.apron?.proud ?? { mm: FARMHOUSE.proud, unit: 'in' }" label="In front of the doors" data-test="sink-apron-proud" @update:model-value="setApron('proud', $event)" /></v-col>
+            </template>
             <v-col v-if="cabinet.sink.mount !== 'integrated'" cols="6"><v-select :model-value="faucetChoice" label="Faucet" :items="FAUCETS" hide-details data-test="sink-faucet" @update:model-value="setFaucet" /></v-col>
             <v-col v-if="cabinet.sink.faucet?.holes === 3" cols="6"><LengthField :model-value="{ mm: faucetSpread(cabinet.sink), unit: 'in' }" label="Outer holes apart" data-test="sink-spread" @update:model-value="setFaucetSpread" /></v-col>
           </v-row>

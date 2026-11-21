@@ -33,8 +33,8 @@ export const FALSE_FRONT = {
 };
 
 /** Whether a drawer is a false front: it asks to be, on an opening that can take one. */
-export function isFalseFront(design: Pick<DrawerDesign, 'falseFront'>, opening: Pick<CabinetOpening, 'overDoors'> | undefined): boolean {
-  return !!design.falseFront && !!opening?.overDoors;
+export function isFalseFront(design: Pick<DrawerDesign, 'falseFront'>, opening: Pick<CabinetOpening, 'overDoors' | 'apron'> | undefined): boolean {
+  return !!design.falseFront && !!opening?.overDoors && !opening.apron;
 }
 
 /** Where a false front's back face is, front to back, and its bottom edge, in the cabinet's frame. */

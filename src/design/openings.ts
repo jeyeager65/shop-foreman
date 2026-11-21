@@ -15,6 +15,7 @@ import { frontWidth } from './diagonal';
 import { constructionRules, thicknessOf } from './style';
 import { bayDivider, bayOpeningId, baySpans, rowSplit, splitOpeningId } from './bays';
 import { DEFAULT_UNIT_PREFERENCES, formatLength } from '@/units';
+import { apronRowHeight, farmhouseRow } from './sinks';
 
 /** Gap between the back of a closed door and what it closes against (bumpers). Tune me. */
 export const DOOR_STANDOFF: Mm = 2;
@@ -72,7 +73,10 @@ export function deriveCabinetOpenings(cabinet: CabinetDesign, materials: Materia
   if (width <= 0) throw new Error(rules.hasFaceFrame ? 'The cabinet is too narrow for its two stiles.' : 'The cabinet is too narrow for its two sides.');
   // Between two rows: a rail, or nothing. Between two door rows stands a fixed shelf,
   // so there the rows are at least its thickness apart.
-  const rows = cabinet.layout.rows;
+  // A farmhouse sink's apron takes the top row of drawer over doors: that row is as tall as the apron reaches down
+  // from the case's top, its bottom where the sink stands (`apronRowHeight`).
+  const apron = farmhouseRow(cabinet) ? apronRowHeight(cabinet, rules.openingsTop) : undefined;
+  const rows = apron === undefined ? cabinet.layout.rows : cabinet.layout.rows.map((r, i) => (i === 0 ? { ...r, height: { mm: apron, unit: 'in' as const } } : r));
   const shelf = thicknessOf(materials, cabinet.materials.caseId);
   // In a case that is already there the rail under each drawer opening is measured.
   const measured = rules.hasFaceFrame ? cabinet.existing?.drawers : undefined;
@@ -134,7 +138,7 @@ export function deriveCabinetOpenings(cabinet: CabinetDesign, materials: Materia
         ...(fixedOverlay ? { fixedOverlay: { ...fixedOverlay, ...edges } } : {}),
         ...(inset ? { inset: { gap: inset.gap, frontMaterialId: cabinet.materials.caseId } } : {}),
         ...(rules.inFrame ? { inFrame: true as const } : {}),
-        ...(i === 0 && row.use === 'drawer' && parts === 1 && rows[1]?.use === 'doors' && !cabinet.existing ? { overDoors: true as const } : {}),
+        ...(i === 0 && row.use === 'drawer' && parts === 1 && rows[1]?.use === 'doors' && !cabinet.existing ? { overDoors: true as const, ...(apron !== undefined ? { apron: true as const } : {}) } : {}),
         ...(several ? { bay: b + 1 } : {}),
       };
       if (parts === 1) return [whole];

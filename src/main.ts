@@ -12,7 +12,7 @@ import { addMaterialFromCatalog } from './design/materials';
 import { SUSAN_RIM_HARDBOARD_ID } from './design/susan';
 import { flutesFor, ripplesFor, starterPattern } from './design/pattern';
 import type { CabinetSink, FrontPattern } from './model';
-import { SINK_MOUNTS, newSink } from './design/sinks';
+import { SINK_MOUNTS, sinkOfKind } from './design/sinks';
 import { createRun } from './design/runs';
 import { setPosts, setBottomKind } from './design/casters';
 import { cabinetsOf } from './design/settings';
@@ -107,23 +107,6 @@ void store.load().then(async () => {
       opened.adjustableShelves = 0;
     }
     if (opened && support === 'none') opened.topSupport = undefined;
-    // &basin=dropIn (or undermount, vessel, integrated, farmhouse; `:double`, `:6040` two bowls; `:oval`; `:faucet3`; none) a sink
-    // over it, set in the top over it, sized to suit the cabinet.
-    const basin = new URLSearchParams(location.search).get('basin');
-    if (opened && basin) {
-      const [mount, ...more] = basin.split(':');
-      if (mount === 'none') delete opened.sink;
-      else if (mount && SINK_MOUNTS.some((m) => m.value === mount)) {
-        const made = newSink(opened);
-        made.mount = mount as CabinetSink['mount'];
-        if (more.includes('oval')) made.shape = 'oval';
-        if (more.includes('rectangle')) made.shape = 'rectangle';
-        if (more.includes('double') || more.includes('6040')) made.double = { leftShare: more.includes('6040') ? 0.6 : 0.5 };
-        // `:faucet1`, `:faucet3`: a faucet for one hole or three.
-        if (more.includes('faucet1') || more.includes('faucet3')) made.faucet = { holes: more.includes('faucet3') ? 3 : 1 };
-        opened.sink = made;
-      }
-    }
     if (opened && sink === 'none') opened.inside = undefined;
     // &organizers=tray,tray:8,shelf:16,sides:24 sets what stands inside it, from the floor up: a tray, a shelf or a shelf
     // with side trays (`sides`), each with its height above the cabinet's floor in inches (a tray with none: on the
@@ -229,6 +212,22 @@ void store.load().then(async () => {
     // &depth=21 its depth in inches.
     const depthAsked = Number(new URLSearchParams(location.search).get('depth'));
     if (opened && depthAsked > 0) opened.size.depth = len(`${depthAsked}"`);
+    // &basin=dropIn (or undermount, vessel, integrated, farmhouse; `:double`, `:6040` two bowls; `:oval`; `:faucet3`; none) a sink
+    // over it, set in the top over it, sized to suit the cabinet (after its width and depth are set).
+    const basin = new URLSearchParams(location.search).get('basin');
+    if (opened && basin) {
+      const [mount, ...more] = basin.split(':');
+      if (mount === 'none') delete opened.sink;
+      else if (mount && SINK_MOUNTS.some((m) => m.value === mount)) {
+        const made = sinkOfKind(opened, mount as CabinetSink['mount']);
+        if (more.includes('oval')) made.shape = 'oval';
+        if (more.includes('rectangle')) made.shape = 'rectangle';
+        if (more.includes('double') || more.includes('6040')) made.double = { leftShare: more.includes('6040') ? 0.6 : 0.5 };
+        // `:faucet1`, `:faucet3`: a faucet for one hole or three.
+        if (more.includes('faucet1') || more.includes('faucet3')) made.faucet = { holes: more.includes('faucet3') ? 3 : 1 };
+        opened.sink = made;
+      }
+    }
     // &hub=left|right|none a power hub in the open space at its top (a shop table's), its outlets in that side.
     const hubAsked = new URLSearchParams(location.search).get('hub');
     if (opened && (hubAsked === 'left' || hubAsked === 'right')) opened.hub = { side: hubAsked };

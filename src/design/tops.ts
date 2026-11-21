@@ -10,7 +10,7 @@
  */
 import type { BoughtTop, CabinetDesign, CabinetSink, DesignedCabinetContext, Hardware, LeafEdge, Material, Mm, OwnTop, TopLeaf, Part, Point, Project, Run, TopDesign, TopSettings, TorsionSettings, TorsionTable, Vec3 } from '@/model';
 import { applianceFootprint, appliancePlace, applianceShapeId, appliancesOf, underCounter } from './appliances';
-import { SINK, faucetHoles, roundedOutline, sinkCentre, sinkLook, sinkOpenings } from './sinks';
+import { SINK, apronOf, farmhouseRow, faucetHoles, roundedOutline, sinkCentre, sinkLook, sinkOpenings } from './sinks';
 import { LEAF, deriveTorsionParts, leafHardwareShapes, lightTopTable, torsionRibProblem, torsionThickness } from './torsion';
 import { DROP_LEAF, dropLeafShapes } from './dropLeaf';
 import { pocketRow } from './pocketHoles';
@@ -795,6 +795,8 @@ export interface SinkCut {
   cz: Mm;
   dir: 1 | -1;
   outlines: [Mm, Mm][][];
+  /** A farmhouse sink's notch in the top, from its front edge back to over the sink's back flange, as wide as the sink. */
+  notch?: { x0: Mm; x1: Mm; zBack: Mm };
   /** Its faucet's holes through the top, each a loop, when they are the top's to have (`holesInTop`). */
   holes: [Mm, Mm][][];
   x0: Mm;
@@ -838,9 +840,14 @@ export function sinkCuts(project: Project, pieces: TopPiece[], torsionToo = fals
         front = SINK.frontGuess;
       }
       if (!toPiece) continue;
-      const [lx, lz] = sinkCentre(cabinet, along !== undefined ? front : SINK.frontGuess);
+      // A farmhouse sink's apron stands its own distance in front of the doors' faces (the top's front edge less its overhang).
+      const overhang = piece.own?.overhang.front.mm ?? piece.settings.overhang.front.mm;
+      const apronFace = (along !== undefined ? front : SINK.frontGuess) - overhang + apronOf(sink).proud;
+      const [lx, lz] = sinkCentre(cabinet, sink.mount === 'farmhouse' ? apronFace : along !== undefined ? front : SINK.frontGuess);
       const [cx, cz] = toPiece(lx, lz);
-      const outlines = sinkOpenings(sink).map((loop) => loop.map(([x, z]): [Mm, Mm] => [cx + dir * x, cz + dir * z]));
+      // A farmhouse sink is not set in an opening: the top is notched round it from its front edge (`notch`).
+      const outlines = sink.mount === 'farmhouse' ? [] : sinkOpenings(sink).map((loop) => loop.map(([x, z]): [Mm, Mm] => [cx + dir * x, cz + dir * z]));
+      const notch = sink.mount === 'farmhouse' && dir === 1 ? { x0: cx - sink.width.mm / 2, x1: cx + sink.width.mm / 2, zBack: cz - sink.depth.mm / 2 + SINK.flange } : undefined;
       const holes = faucetHoles(sink).map((loop) => loop.map(([x, z]): [Mm, Mm] => [cx + dir * x, cz + dir * z]));
       const outline = outlines.flat();
       const xs = outline.map((p) => p[0]);
@@ -857,6 +864,7 @@ export function sinkCuts(project: Project, pieces: TopPiece[], torsionToo = fals
         dir,
         outlines,
         holes,
+        ...(notch ? { notch } : {}),
         x0: outline.length ? Math.min(...xs) : cx - half[0]!,
         x1: outline.length ? Math.max(...xs) : cx + half[0]!,
         zBack: outline.length ? Math.min(...zs) : cz - half[1]!,
@@ -889,8 +897,11 @@ export function sinkProblems(project: Project, cabinet: CabinetDesign, materials
     if (kind === 'bought') out.push("An undermount sink leaves the top's cut edge showing, and a laminate top's core swells when it gets wet: drop it in instead, or use a stone or solid wood top.");
     else if ((kind === 'made' || kind === 'torsion') && material?.groupId !== 'solid-wood') out.push(`An undermount sink leaves the top's cut edge showing: ${material?.name.toLowerCase() ?? 'this material'}'s edge cannot be left open where it gets wet. Drop it in instead, or use a stone or solid wood top.`);
   }
+  // A farmhouse sink stands in the top row over the doors, its apron that row's front.
+  if (sink.mount === 'farmhouse' && !farmhouseRow(cabinet)) out.push('A farmhouse sink stands in the top row, its apron in place of that row\'s front: give the cabinet a drawer row over its doors (Openings), whole across.');
   // The bowl hangs between the case sides (a drop-in's rim may lap them).
   const inside = cabinet.size.width.mm - 2 * thicknessOf(materials, cabinet.materials.caseId);
+  // (A farmhouse sink's whole body stands between them.)
   const bowl = sink.mount === 'vessel' ? 0 : sink.mount === 'integrated' ? sink.width.mm * SINK.integratedBowl.width : sink.width.mm - (sink.mount === 'dropIn' ? 2 * SINK.rim : 0);
   const [cx] = sinkCentre(cabinet);
   if (bowl > 0 && (cx - bowl / 2 < (cabinet.size.width.mm - inside) / 2 - 0.5 || cx + bowl / 2 > (cabinet.size.width.mm + inside) / 2 + 0.5)) {
@@ -904,6 +915,19 @@ export function sinkProblems(project: Project, cabinet: CabinetDesign, materials
     if (cut.holes.length && cut.dir === 1 && back - cut.piece.zBack < MM_PER_INCH - 0.5) out.push(`The faucet holes come within an inch of the top's back edge: move the sink forward, choose a shallower one, or a faucet on the wall.`);
   }
   return out;
+}
+
+/**
+ * A top's panel (its front-left corner at `x0`, `zFront` in the piece's frame) notched round a farmhouse sink: its
+ * outline, the first cutout, runs in from its front edge, across behind the sink, and out again.
+ */
+function withNotch(panel: Part, notch: NonNullable<SinkCut['notch']>, x0: Mm, zFront: Mm): void {
+  const outline = panel.features.find((f) => f.kind === 'cutout');
+  if (outline?.kind !== 'cutout') return;
+  const [w, h] = [panel.size.width, panel.size.height];
+  const [a, b, d] = [Math.max(0, notch.x0 - x0), Math.min(w, notch.x1 - x0), Math.min(h - 1, zFront - notch.zBack)];
+  outline.outline = [{ x: 0, y: 0 }, { x: a, y: 0 }, { x: a, y: d }, { x: b, y: d }, { x: b, y: 0 }, { x: w, y: 0 }, { x: w, y: h }, { x: 0, y: h }];
+  panel.shaped = true;
 }
 
 /** A sink's opening as a feature of a top's panel whose front-left corner (seen from above) is at `x0`, `zFront` in the piece's frame. */
@@ -1038,6 +1062,8 @@ export function shownTopParts(project: Project, materials: Material[], hardware:
   const cuts = sinkCuts(project, pieces);
   const withSinks = (p: TopPiece, part: Part): Part => {
     part.features.push(...cuts.filter((c) => c.piece === p).flatMap((c) => sinkFeature(c, p.x0, p.zFront)));
+    const notch = cuts.find((c) => c.piece === p && c.notch)?.notch;
+    if (notch) withNotch(part, notch, p.x0, p.zFront);
     return part;
   };
   return [...leafShapes, ...slabs
@@ -1166,6 +1192,9 @@ export function deriveTopParts(project: Project, materials: Material[]): Part[] 
     }
     // A sink's opening, cut through the panel inside its outline.
     panel.features.push(...sinks.filter((c) => c.piece.id === p.id).flatMap((c) => sinkFeature(c, x0, zFront)));
+    // A farmhouse sink: the panel notched round it from its front edge.
+    const notch = sinks.find((c) => c.piece.id === p.id && c.notch)?.notch;
+    if (notch) withNotch(panel, notch, x0, zFront);
     // Pocket screws from underneath along a joint's edge, into the piece beside it.
     for (const end of p.pockets ?? []) panel.features.push(...pocketRow(`joint-${end}`, 'B', end === 'left' ? 'x0' : 'x1', jointPockets(zFront - zBack)));
     parts.push(panel);
@@ -1173,7 +1202,11 @@ export function deriveTopParts(project: Project, materials: Material[]): Part[] 
       // The front strip runs the whole length; an open end's runs behind it to the wall.
       // At a mitre the front strip stops at the corner of the two fronts.
       const [f0, f1] = [p.mitre?.end === 'left' ? p.mitre.to[0] : p.x0, p.mitre?.end === 'right' ? p.mitre.to[0] : p.x1];
-      if (edges.front) parts.push(part(p, '-edge-front', 'Countertop edge, front', f1 - f0, thick, strip, [f0, p.y, p.zFront], false, stripMaterial));
+      // Either side of a farmhouse sink's notch, a strip each.
+      if (edges.front && notch) {
+        parts.push(part(p, '-edge-front', 'Countertop edge, front, left of the sink', notch.x0 - f0, thick, strip, [f0, p.y, p.zFront], false, stripMaterial));
+        parts.push(part(p, '-edge-front-2', 'Countertop edge, front, right of the sink', f1 - notch.x1, thick, strip, [notch.x1, p.y, p.zFront], false, stripMaterial));
+      } else if (edges.front) parts.push(part(p, '-edge-front', 'Countertop edge, front', f1 - f0, thick, strip, [f0, p.y, p.zFront], false, stripMaterial));
       if (edges.back) parts.push(part(p, '-edge-back', 'Countertop edge, back', p.x1 - p.x0, thick, strip, [p.x1, p.y, p.zBack], false, stripMaterial, [-1, 0, 0]));
       if (open.left) parts.push(part(p, '-edge-left', 'Countertop edge, left end', zFront - zBack, thick, strip, [p.x0, p.y, zBack], false, stripMaterial, [0, 0, 1]));
       if (open.right) parts.push(part(p, '-edge-right', 'Countertop edge, right end', zFront - zBack, thick, strip, [p.x1, p.y, zFront], false, stripMaterial, [0, 0, -1]));
@@ -1184,7 +1217,11 @@ export function deriveTopParts(project: Project, materials: Material[]): Part[] 
       const length = x1 - x0;
       const depth = zFront - zBack;
       const under = p.y + t;
-      parts.push(part(p, '-layer-front', 'Build-up strip, front', length, w, t, [x0, under, zFront], true));
+      if (notch) {
+        // Either side of a farmhouse sink's notch.
+        parts.push(part(p, '-layer-front', 'Build-up strip, front, left of the sink', notch.x0 - x0, w, t, [x0, under, zFront], true));
+        parts.push(part(p, '-layer-front-2', 'Build-up strip, front, right of the sink', x1 - notch.x1, w, t, [notch.x1, under, zFront], true));
+      } else parts.push(part(p, '-layer-front', 'Build-up strip, front', length, w, t, [x0, under, zFront], true));
       parts.push(part(p, '-layer-back', 'Build-up strip, back', length, w, t, [x0, under, zBack + w], true));
       const across = Math.max(1, Math.ceil(length / BUILD_UP_SPACING));
       for (let i = 0; i <= across; i++) {

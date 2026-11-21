@@ -1027,6 +1027,8 @@ export interface CabinetOpening {
    * may be a false front (`DrawerDesign.falseFront`), as over a sink.
    */
   overDoors?: true;
+  /** That top row over doors, where a farmhouse sink's apron stands in place of a front: nothing is hung on it. */
+  apron?: true;
   /**
    * The overlays of a front on this opening when the construction style fixes them
    * (frameless: full overlay; shop: inset, all negative). Unset when each front
