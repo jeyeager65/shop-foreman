@@ -8,7 +8,7 @@
  * output, a 3MF to print or G-code for a machine of the shop. Nothing is saved in a project. What was
  * typed last is kept in the browser; a handle's sizes can be saved to its entry in the shop profile.
  */
-import { mdiArrowLeft, mdiCubeOutline, mdiPrinter3dNozzleOutline, mdiRobotIndustrialOutline } from '@mdi/js';
+import { mdiArrowLeft, mdiCubeOutline, mdiPlus, mdiPrinter3dNozzleOutline, mdiRobotIndustrialOutline, mdiTrashCanOutline } from '@mdi/js';
 import manifoldUrl from 'manifold-3d/manifold.wasm?url';
 import { computed, reactive, ref, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -17,7 +17,7 @@ import StockCarveView from '@/components/StockCarveView.vue';
 import MmField from '@/components/MmField.vue';
 import PocketGuideInUse from '@/components/PocketGuideInUse.vue';
 import PanelTitle from '@/components/PanelTitle.vue';
-import { type JigFile, type JigItem, type JigValues, handleWith, jigItems, withCopies } from '@/jigs/catalog';
+import { type JigField, type JigFile, type JigItem, type JigValues, handleWith, jigItems, jigRows, withCopies } from '@/jigs/catalog';
 import type { PrintObject } from '@/jigs/threemf';
 import { write3mf } from '@/jigs/threemf';
 import type { Handle, ShownIn } from '@/model';
@@ -71,6 +71,17 @@ const state = computed<Kept | undefined>(() => {
   return kept[i.id];
 });
 const values = computed<JigValues>(() => ({ ...item.value?.defaults, ...state.value?.values }));
+/** A list field's rows, and its edits: each kept as the list's JSON. */
+const rowsOf = (f: JigField) => jigRows(values.value, f.key);
+const setRows = (f: JigField, rows: Record<string, string>[]) => set(f.key, JSON.stringify(rows));
+const setCell = (f: JigField, i: number, key: string, value: string) => setRows(f, rowsOf(f).map((row, k) => (k === i ? { ...row, [key]: value } : row)));
+/** What a row shows in a column: its own value where that is one of the column's choices now, else the first. */
+const cellValue = (col: NonNullable<JigField['columns']>[number], row: Record<string, string>) => {
+  const items = col.choicesFor ? col.choicesFor(values.value) : col.choices;
+  return items.some((c) => c.value === row[col.key]) ? row[col.key] : items[0]?.value;
+};
+const addRow = (f: JigField) => setRows(f, [...rowsOf(f), { ...(rowsOf(f).at(-1) ?? {}) }]);
+const removeRow = (f: JigField, i: number) => setRows(f, rowsOf(f).filter((_, k) => k !== i));
 const set = (key: string, value: number | string | null) => {
   if (!state.value || value === null) return;
   state.value.values[key] = value;
@@ -224,9 +235,31 @@ const madeWords = (i: JigItem) => (i.made === 'print' ? '3D print' : 'Cut on the
         <v-card class="pa-5">
           <PanelTitle icon="details">Sizes</PanelTitle>
           <v-row density="compact">
-            <v-col v-for="f in fields" :key="f.key" cols="12" sm="6">
+            <v-col v-for="f in fields" :key="f.key" cols="12" :sm="f.kind === 'rows' ? 12 : 6">
+              <!-- A list: a row each, its choices side by side; a row added copies the last. -->
+              <div v-if="f.kind === 'rows'" :data-test="`jig-field-${f.key}`">
+                <div class="text-body-2 mb-2">{{ f.label }}</div>
+                <div v-for="(row, i) in rowsOf(f)" :key="i" class="jig-row" data-test="jig-row">
+                  <span class="text-body-2 text-medium-emphasis jig-row-name">{{ f.row }} {{ i + 1 }}</span>
+                  <v-select
+                    v-for="col in (f.columns ?? []).filter((c) => !c.when || c.when(row, values))"
+                    :key="col.key"
+                    :model-value="cellValue(col, row)"
+                    :items="col.choicesFor ? col.choicesFor(values) : col.choices"
+                    :label="col.label"
+                    density="compact"
+                    hide-details
+                    class="jig-row-cell"
+                    :data-test="`jig-row-${col.key}`"
+                    @update:model-value="setCell(f, i, col.key, $event)"
+                  />
+                  <v-btn :icon="mdiTrashCanOutline" variant="text" size="small" :disabled="rowsOf(f).length < 2" :aria-label="`Remove ${f.row?.toLowerCase()} ${i + 1}`" data-test="jig-row-remove" @click="removeRow(f, i)" />
+                </div>
+                <v-btn v-if="rowsOf(f).length < (f.max ?? 6)" size="small" variant="tonal" :prepend-icon="mdiPlus" data-test="jig-row-add" @click="addRow(f)">Add a {{ (f.row ?? 'row').toLowerCase() }}</v-btn>
+                <div v-if="f.hint" class="text-caption text-medium-emphasis mt-2">{{ f.hint }}</div>
+              </div>
               <MmField
-                v-if="f.kind === 'mm'"
+                v-else-if="f.kind === 'mm'"
                 :model-value="Number(values[f.key])"
                 :owner="state"
                 :field="f.key"
@@ -360,6 +393,23 @@ const madeWords = (i: JigItem) => (i.made === 'print' ? '3D print' : 'Cut on the
 .jig-card {
   height: 100%;
   cursor: pointer;
+}
+/* A list field's row: its name, then its choices side by side, wrapping on a narrow screen. */
+.jig-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+.jig-row-name {
+  width: 64px;
+  flex: none;
+}
+.jig-row-cell {
+  flex: 1 1 140px;
+  min-width: 140px;
 }
 .jig-picture {
   display: block;

@@ -132,15 +132,16 @@ describe('the catalog of things that are not cabinet parts', () => {
     const [file] = test.gcode!(test.defaults, 1, 'lowrider-3');
     expect(file!.name).toBe('pocket-hole-test.gcode');
     expect(file!.text).toContain('G21');
-    expect(file!.note).toBe('scrap at least 160 × 100 mm; 2 pockets, seat 13.7 mm from the edge; cut with 1/8" ball nose; the pilot bit 38.7 mm out of the chuck');
-    // Every kind side by side: one of each, the flat end mill first.
-    const [every] = test.gcode!({ ...test.defaults, bit: 'all' }, 1, 'lowrider-3');
-    expect(every!.note).toMatch(/^scrap at least 240 × 100 mm; 4 pockets, .*cut with 1\/8" end mill then 1\/8" ball nose/);
-    expect(test.notes!({ ...test.defaults, bit: 'all' }).slice(0, 4).map((n) => n.slice(0, 9))).toEqual(['Pocket 1.', 'Pocket 2.', 'Pocket 3.', 'Pocket 4.']);
-    // The ledge is a choice for two alike, with either bit; side by side has it both ways already.
-    const ledge = test.fields.find((f) => f.key === 'ledge')!;
-    expect(ledge.when!(test.defaults)).toBe(true);
-    expect(ledge.when!({ ...test.defaults, bit: 'all' })).toBe(false);
+    expect(file!.note).toBe('scrap at least 160 × 100 mm; 2 pockets; cut with 1/8" ball nose; the pilot bit 38.7 mm out of the chuck');
+    // Four pockets with the ball nose, two with a ledge: the end mill cuts the ledges first, then the ball nose the pockets.
+    const four = { ...test.defaults, pockets: JSON.stringify([{ ledge: 'no' }, { ledge: 'no' }, { ledge: 'endmill-1-8' }, { ledge: 'endmill-1-8' }]) };
+    const [every] = test.gcode!(four, 1, 'lowrider-3');
+    expect(every!.note).toMatch(/^scrap at least 240 × 100 mm; 4 pockets; cut with 1\/8" end mill then 1\/8" ball nose/);
+    expect(test.notes!(four).slice(0, 4).map((n) => n.slice(0, 9))).toEqual(['Pocket 1.', 'Pocket 2.', 'Pocket 3.', 'Pocket 4.']);
+    // A pocket's ledge: with the scrap's own end mill (just no or yes), or round a ball nose's pocket with an end mill chosen.
+    const ledge = test.fields.find((f) => f.key === 'pockets')!.columns!.find((c) => c.key === 'ledge')!;
+    expect(ledge.choicesFor!(test.defaults).map((c) => c.value)).toEqual(['no', 'endmill-1-8', 'endmill-1-4']);
+    expect(ledge.choicesFor!({ ...test.defaults, bit: 'endmill-1-8' }).map((c) => c.title)).toEqual(['No', 'Yes']);
     // It has no solid: the page carves its G-code.
     expect(test.carved).toBe(true);
     const guide = item('pocket-guide');
@@ -157,7 +158,8 @@ describe('the catalog of things that are not cabinet parts', () => {
     expect(guide.notes!(guide.defaults).join(' ')).toMatch(/made for 3\/4" stock/);
     expect(guide.notes!(guide.defaults)[0]).toMatch(/^Chuck the bit so it stands 39\.0 mm out of the chuck.*A regular 4 mm or 5\/32" bit is long enough/);
     expect(guide.problems({ ...guide.defaults, stock: 'other', thickness: 9 })).toEqual(['That stock is too thin for a pocket hole.']);
-    expect(test.problems({ materialId: 'nope' })).toEqual(["Choose the scrap's material."]);
+    expect(test.problems({ ...test.defaults, materialId: 'nope' })).toEqual(["Choose the scrap's material."]);
+    expect(test.problems({ ...test.defaults, pockets: '[]' })).toEqual(['Add a pocket to try.']);
   });
 });
 

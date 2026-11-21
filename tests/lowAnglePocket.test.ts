@@ -183,9 +183,15 @@ describe('the scrap test with low-angle pockets', () => {
     const profile = createStarterShopProfile();
     const items = jigItems(profile);
     const test = items.find((i) => i.id === 'pocket-test')!;
+    // The 1/4" end mill cuts low-angle pockets only; the 1/8" one either kind. Each row its angle and its seat.
     const bits = test.fields.find((f) => f.key === 'bit')!;
-    expect(bits.choices!.map((c) => c.value)).toEqual(expect.arrayContaining(['low3', 'low6', 'low']));
-    const values = { ...test.defaults, bit: 'low3' };
+    expect(bits.choices!.map((c) => c.value)).toEqual(expect.arrayContaining(['endmill-1-4', 'endmill-1-8']));
+    const angle = test.fields.find((f) => f.key === 'pockets')!.columns!.find((c) => c.key === 'angle')!;
+    expect(angle.choicesFor!({ ...test.defaults, bit: 'endmill-1-4' }).map((c) => c.value)).toEqual(['3', '6']);
+    expect(angle.choicesFor!({ ...test.defaults, bit: 'endmill-1-8' }).map((c) => c.value)).toEqual(['15', '3', '6']);
+    const seats = test.fields.find((f) => f.key === 'pockets')!.columns!.find((c) => c.key === 'seat')!;
+    expect(seats.choices.length).toBeGreaterThan(3);
+    const values = { ...test.defaults, bit: 'endmill-1-4', pockets: JSON.stringify([{ angle: '3' }, { angle: '3' }]) };
     const files = test.gcode!(values, 1, profile.activeMachineId);
     expect(files[0]!.text).toContain('2 low-angle pockets');
     expect(test.notes!(values).join(' ')).toMatch(/Low angle, 3°: a slot .* The driver comes in about \d+° steeper/);

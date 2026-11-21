@@ -36,8 +36,9 @@ export const POCKET_TEST = {
   /** The first pocket's centre from the scrap's left end, and the gap to the next. */
   first: 70,
   spacing: 40,
-  /** How many pockets of one kind, all alike. Of every kind side by side: one each. */
+  /** How many pockets a test starts with, alike; and the most it may have. */
   count: 2,
+  most: 6,
   /** The smallest flat end mill worth cutting a pocket with. */
   smallestEndMill: 3,
 };
@@ -49,6 +50,8 @@ export interface PocketKind {
   /** `arc`: a low-angle pocket with an arced floor, at `angleDeg`. */
   bit: 'ball' | 'flat' | 'arc';
   ledge: boolean;
+  /** A 15° pocket's ledge cut with this end mill (its corners the bit's radius; the cover drawn to suit). Left out: the flat end mill. */
+  ledgeBitId?: Id;
   angleDeg?: LowAngle;
   /** A low-angle pocket's seat from the edge, when it is not the usual one. */
   seat?: Mm;
@@ -129,22 +132,28 @@ export function pocketTestStock(machine: { probe: { edgeInset: Mm; clearSquare: 
  * The test file for one material. `kinds`: the pockets, left to right (left out: two as a job cuts them,
  * with the ball nose and no ledge).
  */
-export function buildPocketTest(shop: Shop, materialId: Id, kinds: PocketKind[] = Array.from({ length: POCKET_TEST.count }, () => ({ bit: 'ball' as const, ledge: false }))): PocketTest {
+export function buildPocketTest(shop: Shop, materialId: Id, kinds: PocketKind[] = Array.from({ length: POCKET_TEST.count }, () => ({ bit: 'ball' as const, ledge: false })), bitId?: Id): PocketTest {
   const machine = activeMachine(shop);
   const material = shop.materials.find((m) => m.id === materialId);
   if (!material) throw new Error(`Material not found: ${materialId}`);
   if (!kinds.length) throw new Error('The test has no pockets.');
   const offered = pocketTestBits(shop).filter((t) => t.settings[materialId]);
-  const ball = offered.find(isBallNose);
-  const flat = offered.find((t) => !isBallNose(t));
+  // The bit chosen for the scrap cuts its pockets: a ball nose, a narrow end mill, or (low angle) a wide one.
+  const chosen = bitId ? shop.tools.find((t) => t.id === bitId && t.settings[materialId]) : undefined;
+  const ball = chosen && isBallNose(chosen) ? chosen : offered.find(isBallNose);
+  const flat = chosen && !isBallNose(chosen) && isPocketEndMill(chosen) ? chosen : offered.find((t) => !isBallNose(t));
   if (kinds.some((k) => k.bit === 'ball') && !ball) throw new Error(`No ball nose bit in the shop profile has settings for ${material.name}.`);
-  const wide = kinds.some((k) => k.bit === 'arc') ? lowPocketBit(shop, materialId) : undefined;
+  const wide = kinds.some((k) => k.bit === 'arc') ? (chosen && chosen.shape.kind === 'endMill' && cutDiameter(chosen) <= POCKET.bore + 1e-9 ? chosen : lowPocketBit(shop, materialId)) : undefined;
   if (kinds.some((k) => k.bit === 'arc') && !wide) throw new Error(`No flat end mill in the shop profile can cut a low-angle pocket in ${material.name}: it takes one no wider than the pocket.`);
   for (const kind of kinds) if (kind.bit === 'arc' && kind.ledge && !lowCoverFits(material.measuredThickness.mm, kind.angleDeg ?? 3, kind.seat)) throw new Error(`${material.name} is too thin for a cover over a low-angle pocket: the screw's head comes up nearly to the face.`);
-  // A 15° pocket's ledge is the flat end mill's; a low-angle pocket's is cut with the bit that cut the pocket.
-  const needsFlat = (k: PocketKind) => k.bit === 'flat' || (k.bit === 'ball' && k.ledge);
+  // A 15° pocket's ledge is cut with its own end mill (the 1/8" or the 1/4", its corners the bit's radius), else the flat end mill;
+  // a low-angle pocket's with the bit that cut the pocket.
+  const ledgeTool = (k: PocketKind): Tool | undefined => (k.bit === 'arc' ? wide : (k.ledgeBitId ? shop.tools.find((t) => t.id === k.ledgeBitId && t.settings[materialId]) : undefined) ?? flat);
+  const needsFlat = (k: PocketKind) => k.bit === 'flat' || (k.bit === 'ball' && k.ledge && !k.ledgeBitId);
   if (kinds.some(needsFlat) && !flat) throw new Error(`No flat end mill in the shop profile can cut a pocket or its ledge in ${material.name}: it takes one no wider than half the pocket.`);
-  const narrow = kinds.some((k) => k.channel) ? channelBit(shop, materialId) : undefined;
+  if (kinds.some((k) => k.ledge && k.bit !== 'arc' && !ledgeTool(k))) throw new Error(`The end mill chosen for a ledge has no settings for ${material.name}.`);
+  // A channel is cut with the scrap's own bit where it is no wider than the pilot, else with the narrowest end mill that is.
+  const narrow = kinds.some((k) => k.channel) ? (chosen && cutDiameter(chosen) <= POCKET.drill + 1e-9 ? chosen : channelBit(shop, materialId)) : undefined;
   if (kinds.some((k) => k.channel) && !narrow) throw new Error(`No flat end mill in the shop profile can cut a screw's channel in ${material.name}: it takes one no wider than the ${POCKET.drill} mm pilot.`);
   const thickness = material.measuredThickness.mm;
   const feedsOf = (tool: Tool) => {
@@ -154,6 +163,8 @@ export function buildPocketTest(shop: Shop, materialId: Id, kinds: PocketKind[] 
   // Only the shapes the test's pockets have: a low-angle test asks nothing of the ball nose.
   const round = ball && kinds.some((k) => k.bit === 'ball') ? pocketShape(thickness, cutDiameter(ball)) : undefined;
   const slot = flat && kinds.some(needsFlat) ? slotShape(thickness, cutDiameter(flat)) : undefined;
+  /** A 15° pocket's ledge opening: the same whatever bit cuts it (only its corners are the bit's). */
+  const ledgeOpening = slotLedge(slotShape(thickness, Math.min(POCKET.bore / 2, flat ? cutDiameter(flat) : 3.175)));
   if ((round && !round.fits) || (slot && !slot.fits)) throw new Error(`${material.name} is too thin for a pocket hole.`);
   const arcOf = (kind: PocketKind) => arcShape(thickness, cutDiameter(wide!), kind.angleDeg ?? 3, kind.seat);
   for (const kind of kinds.filter((k) => k.bit === 'arc')) {
@@ -189,18 +200,36 @@ export function buildPocketTest(shop: Shop, materialId: Id, kinds: PocketKind[] 
       made.push({ kind: 'comment', text: `Pocket ${i + 1} of ${pockets.length}: seat ${seatOf(pocket).toFixed(1)} mm from the edge` }, ...path.steps);
     });
     if (!count) return;
-    tools.push(tool);
-    steps.push({ kind: 'toolChange', toolId: tool.id }, { kind: 'operation', label: `Pocket-hole test: ${what(count)}`, seconds }, ...made);
+    // The same bit straight after itself (a channel cut with the bit that cut the pockets): no change, no probing.
+    if (tools.at(-1) !== tool) {
+      tools.push(tool);
+      steps.push({ kind: 'toolChange', toolId: tool.id });
+    }
+    steps.push({ kind: 'operation', label: `Pocket-hole test: ${what(count)}`, seconds }, ...made);
   };
   const exit = (pocket: { x: Mm }) => ({ x: pocket.x, y: 0 });
   const inward = { x: 0, y: 1 };
   const onlyBall = kinds.every((k) => k.bit === 'ball' && !k.ledge);
-  // The flat end mill first: its own pockets, and the ledges round the ball nose's, which the ball then cuts down through.
+  /** A 15° pocket whose ledge is cut on its own, before the pocket: round a ball nose's, or round a slot cut with another bit. */
+  const ledgeApart = (k: PocketKind) => k.ledge && k.bit !== 'arc' && !(k.bit === 'flat' && ledgeTool(k) === flat);
+  // First the ledges cut with a bit of their own (the pockets are then cut down through them): each bit once.
+  for (const tool of [...new Set(kinds.filter(ledgeApart).map(ledgeTool))].filter((t): t is Tool => !!t && t !== flat)) {
+    work(
+      tool,
+      (pocket, path) => {
+        if (!ledgeApart(pocket) || ledgeTool(pocket) !== tool) return false;
+        pocketLedge(path, exit(pocket), inward, ledgeOpening, cutDiameter(tool) / 2, feedsOf(tool), true);
+        return true;
+      },
+      (count) => `${count === 1 ? 'a ledge' : `${count} ledges`}, ${tool.name.replace(/"/g, ' in')}`,
+    );
+  }
+  // The flat end mill: its own pockets (their ledges with them, where it cuts those too), and the ledges it cuts round others.
   work(
     flat,
     (pocket, path) => {
-      if (pocket.bit === 'flat') pocketSlot(path, exit(pocket), inward, slot!, feedsOf(flat!), pocket.ledge);
-      else if (pocket.bit === 'ball' && pocket.ledge) pocketLedge(path, exit(pocket), inward, slotLedge(slot!), slot!.r, feedsOf(flat!), true);
+      if (pocket.bit === 'flat') pocketSlot(path, exit(pocket), inward, slot!, feedsOf(flat!), pocket.ledge && ledgeTool(pocket) === flat);
+      else if (pocket.bit === 'ball' && pocket.ledge && ledgeTool(pocket) === flat) pocketLedge(path, exit(pocket), inward, ledgeOpening, cutDiameter(flat!) / 2, feedsOf(flat!), true);
       else return false;
       return true;
     },

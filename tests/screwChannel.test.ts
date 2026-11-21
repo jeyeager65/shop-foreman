@@ -69,11 +69,14 @@ describe('a screw channel', () => {
   it('is a choice on the jigs page', () => {
     const profile = createStarterShopProfile();
     const test = jigItems(profile).find((i) => i.id === 'pocket-test')!;
-    expect(test.fields.find((f) => f.key === 'pilot')!.choices!.map((c) => c.value)).toEqual(['drilled', 'channel']);
-    const values = { ...test.defaults, pilot: 'channel' };
+    const way = test.fields.find((f) => f.key === 'pockets')!.columns!.find((c) => c.key === 'way')!;
+    expect(way.choices.map((c) => c.value)).toEqual(['drilled', 'channel']);
+    const values = { ...test.defaults, pockets: JSON.stringify([{ way: 'channel' }, { way: 'channel' }]) };
     const [file] = test.gcode!(values, 1, profile.activeMachineId);
     expect(file!.text).toContain('screw channel');
     expect(file!.note).toContain('nothing to drill');
-    expect(test.notes!(values).join(' ')).toMatch(/Each screw lies in a channel 4 mm wide/);
+    expect(test.notes!(values).join(' ')).toMatch(/its screw's way a channel 4 mm wide cut open from the face/);
+    // With the ball nose, the channel is cut with it too, straight after the pockets: one bit, no change.
+    expect(file!.note).toContain('cut with 1/8" ball nose;');
   });
 });
