@@ -57,7 +57,7 @@ describe('a screw channel', () => {
       { bit: 'ball', ledge: false, channel: true },
       { bit: 'ball', ledge: false, channel: true },
     ]);
-    expect(test.tools.at(-1)!.name).toMatch(/1\/8/);
+    expect(test.tools.at(-2)!.name).toMatch(/1\/8/);
     expect(test.text).toContain('2 screw channels');
     expect(test.text).toContain('Nothing to drill');
     const parser = new (loadGCodeTools().GCodeParser)();
@@ -76,7 +76,7 @@ describe('a screw channel', () => {
     expect(file!.text).toContain('screw channel');
     expect(file!.note).toContain('nothing to drill');
     expect(test.help!(values).join(' ')).toMatch(/the screw's way a channel 4 mm \(≈5\/32"\) wide, cut open from the face/);
-    // With the ball nose, the channel is cut with it too, straight after the pockets: one bit, no change.
-    expect(file!.note).toContain('cut with 1/8" ball nose;');
+    // With the ball nose, the channel is cut with it too, straight after the pockets: no change until the board is cut out.
+    expect(file!.note).toContain('cut with 1/8" ball nose then 1/4" end mill;');
   });
 });

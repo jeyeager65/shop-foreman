@@ -152,18 +152,20 @@ describe('the scrap test with low-angle pockets', () => {
     expect(test.pockets.map((p) => p.angleDeg)).toEqual([3, 3, 6, 6]);
     expect(test.tools.map((t) => t.toolId)).toEqual(['endmill-1-4']);
     expect(test.depth).toBeCloseTo(arcShape(test.thickness, QUARTER, 3).depth, 9);
-    expect(test.stock).toEqual({ x: 70 + 3 * POCKET_TEST.spacing + POCKET_TEST.margin, y: 100 });
+    expect(test.board).toEqual({ x: 2 * POCKET_TEST.side + 3 * POCKET_TEST.spacing, y: 100 });
+    // The bit that cut the pockets reaches through the stock, so it cuts the board out too: no change.
+    expect(test.cutout.toolId).toBe('endmill-1-4');
     expect(test.text).toContain('Pocket-hole test: 4 low-angle pockets');
     expect(test.text).not.toMatch(/^M[345]\b/m);
     expect((test.text.match(/^G38\.2 Z-80 F180 P0\.5/gm) ?? []).length).toBe(1);
-    const moves = [...test.text.matchAll(/^G1 .*$/gm)].map((m) => m[0]);
+    const moves = [...test.text.slice(0, test.text.indexOf('cut the board out')).matchAll(/^G1 .*$/gm)].map((m) => m[0]);
     const word = (line: string, w: string) => Number(new RegExp(`${w}(-?[\\d.]+)`).exec(line)?.[1] ?? NaN);
     const zs = moves.map((l) => word(l, 'Z')).filter((v) => !Number.isNaN(v));
     const ys = moves.map((l) => word(l, 'Y')).filter((v) => !Number.isNaN(v));
     expect(Math.min(...zs)).toBeCloseTo(-test.depth, 2);
     expect(Math.min(...zs)).toBeGreaterThan(-test.thickness);
-    expect(Math.min(...ys)).toBeGreaterThan(0);
-    expect(Math.max(...ys)).toBeLessThan(POCKET_TEST.stock.y);
+    expect(Math.min(...ys)).toBeGreaterThan(test.at.y);
+    expect(Math.max(...ys)).toBeLessThan(test.at.y + POCKET_TEST.stock.y);
     for (const line of test.text.split('\n')) expect(new TextEncoder().encode(line).length).toBeLessThanOrEqual(127);
     const parser = new (loadGCodeTools().GCodeParser)();
     await parser.parseString(test.text);

@@ -6,7 +6,7 @@
  * lists them (`#/jigs`) needs no project.
  */
 import { materialTitle, shopFor } from '@/design';
-import { DEFAULT_UNIT_PREFERENCES } from '@/units';
+import { DEFAULT_UNIT_PREFERENCES, feedWords } from '@/units';
 import { DEFAULT_DOOR_HANDLE } from '@/design/handles';
 import { handleHeight, handleLook, printedHandleProblems, pullProfile } from '@/design/printedHandle';
 import { GUIDE_STOCK, LOW_POCKET, POCKET, POCKET_SLEEVE, SLEEVE_LIMITS, arcShape, lowPocketScrew, sleeveGoesIn, sleeveWords } from '@/geometry/pocketHole';
@@ -98,7 +98,8 @@ export interface JigItem {
   /** A test cut's second picture: the scrap once what is drilled by hand is drilled, cut away to show it. */
   drilled?(values: JigValues, wasmUrl?: string, view?: ScrapView): Promise<PrintObject[]>;
   /** More to say about it for these values, under its sizes: what the numbers come to. */
-  notes?(values: JigValues): string[];
+  /** `machineId`: the machine its G-code is posted for, where what it says goes by the machine (times, feeds). */
+  notes?(values: JigValues, machineId?: Id): string[];
   /** What is kept under the page's "How this works": explanations that need not be in sight. */
   help?(values: JigValues): string[];
   /** The scrap test's pockets in section, each kind once, with the pockets it stands for. */
@@ -448,7 +449,7 @@ export function jigItems(shop: ShopProfile): JigItem[] {
       name: 'Pocket-hole scrap test',
       group: 'Jigs',
       made: 'cnc',
-      about: `Pocket holes cut along the edge of a scrap (${cnc(POCKET_TEST.stock.y)} deep, ${cnc(testSize().x)} long for two pockets), to screw to another piece and see how they hold.`,
+      about: `A board with pocket holes along one edge, cut out of a piece of stock (${cnc(testSize().x)} × ${cnc(testSize().y)} for two pockets), to screw to another piece and see how they hold.`,
       untested: true,
       single: true,
       fields: testFields,
@@ -488,7 +489,7 @@ export function jigItems(shop: ShopProfile): JigItem[] {
         const test = buildPocketTest(shopFor({ materials: shop.materialCatalog }, shop), String(values.materialId), kinds, String(values.bit));
         const ledgeTool = shop.tools.find((x) => x.id === values.ledgeBit);
         return buildDrilledScrap(
-          test.stock,
+          test.board,
           t,
           test.pockets.map((p, i) => {
             const k = kinds[i]!;
@@ -501,18 +502,27 @@ export function jigItems(shop: ShopProfile): JigItem[] {
         );
       },
       // In sight: how long it takes, and only what needs doing (another bit, a guide to print).
-      notes: (values) => {
+      notes: (values, machineId) => {
         const kinds = testKinds(values);
         const low = kinds.some((k) => k.bit === 'arc' && !k.channel);
-        let minutes = '';
+        // How long it takes, then each bit in the order it goes in: what it cuts for how long, and at what feeds.
+        // On the machine the G-code is posted for: its feeds and speeds, as the file has them.
+        const times: string[] = [];
         try {
-          const test = buildPocketTest(shopFor({ materials: shop.materialCatalog }, shop), String(values.materialId), kinds, String(values.bit));
-          minutes = `About ${Math.max(1, Math.round(test.pockets.reduce((n, p) => n + p.seconds, 0) / 60))} min to cut.`;
+          const test = buildPocketTest(shopFor({ materials: shop.materialCatalog, machineId }, shop), String(values.materialId), kinds, String(values.bit));
+          const about = (seconds: number) => (seconds < 50 ? 'under a minute' : `about ${Math.round(seconds / 60)} min`);
+          const feed = (mmPerMin: number) => feedWords(mmPerMin, { ...DEFAULT_UNIT_PREFERENCES, ...shop.units }.feed);
+          times.push(`${about(test.tools.reduce((n, t) => n + t.seconds, 0)).replace(/^./, (c) => c.toUpperCase())} to cut${test.tools.length > 1 ? `, and ${test.tools.length - 1 === 1 ? 'a bit change' : `${test.tools.length - 1} bit changes`}` : ''}.`);
+          test.tools.forEach((t, i) => {
+            const cutsOut = i === test.tools.length - 1;
+            const what = cutsOut ? (test.tools.length === 1 ? 'the pockets, then the board cut out' : i > 0 && test.tools.slice(0, i).some((u) => u.toolId === t.toolId) ? 'back in, to cut the board out' : 'cuts the board out') : '';
+            times.push(`${t.name}${what ? ` (${what})` : ''}: ${about(t.seconds)}. Feed ${feed(t.feed)}, plunge ${feed(t.plunge)}, ${cnc(t.depthPerPass)} a pass${t.rpm ? `, ${t.rpm} RPM` : ''}.`);
+          });
         } catch {
           // What cannot be made is said by the G-code card.
         }
         return [
-          minutes,
+          ...times,
           ...otherBits(values).map((w) => `Another bit: ${w}.`),
           // A seat that leaves too little of the screw in the other part.
           ...kinds.flatMap((k, i) => {
@@ -546,17 +556,17 @@ export function jigItems(shop: ShopProfile): JigItem[] {
         }
         return [
           ...words,
-          `Pockets go left to right along the scrap's front edge; two alike make a joint that does not turn. A low-angle pocket's seat is set as on a pocket-hole machine: a screw goes its length less the seat into the other part.`,
+          `Pockets go left to right along the board's front edge; two alike make a joint that does not turn. A low-angle pocket's seat is set as on a pocket-hole machine: a screw goes its length less the seat into the other part.`,
           'Each drawing under the picture is cut along its screw. The pocket and a channel are slots down the middle (drawn darker, dashed): the wood either side of them is still there.',
           ...(kinds.some((k) => k.channel) ? ["A channel's floor runs along the screw's underside, so the screw leaves the edge at mid-thickness as a drilled one does. Look at how straight the screws go in, and break the joint to see how it holds against one drilled."] : []),
-          `Zero at the scrap's front-left corner: its front edge is the edge the screws leave through${drilled ? ", and the edge the guide's leg goes against" : ''}.`,
+          `The board is cut out of the stock once its pockets are cut, ${cnc(POCKET_TEST.border)} in from the stock's edges, so the stock's own edges need not be straight or square. Zero at the stock's front-left corner. The board's front edge is the edge the screws leave through${drilled ? ", and the edge the guide's leg goes against" : ''}. Cut the holding tabs and trim them flush, on that edge above all: the other board closes on it.`,
           'What to look for: the seat (does the head sit flat on it), tear-out where the bit comes through it, and the joint pulled tight.',
         ];
       },      gcode: (values, _quantity, machineId) => {
         const kinds = testKinds(values);
         const test = buildPocketTest(shopFor({ materials: shop.materialCatalog, machineId }, shop), String(values.materialId), kinds, String(values.bit));
         const drill = kinds.some((k) => !k.channel) ? `; the pilot bit ${cnc(test.bitOutOfChuck)} out of the chuck` : '; nothing to drill';
-        return [{ name: POCKET_TEST_FILE, text: test.text, note: `scrap at least ${cnc(test.stock.x)} × ${cnc(test.stock.y)}; ${test.pockets.length} pockets; cut with ${test.tools.map((t) => t.name).join(' then ')}${drill}` }];
+        return [{ name: POCKET_TEST_FILE, text: test.text, note: `stock at least ${cnc(test.stock.x)} × ${cnc(test.stock.y)}, the board cut out of it ${cnc(test.board.x)} × ${cnc(test.board.y)}; ${test.pockets.length} pockets; cut with ${test.tools.map((t) => t.name).join(' then ')}${drill}` }];
       },
       fileName: POCKET_TEST_FILE,
     },

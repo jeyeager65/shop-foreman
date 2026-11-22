@@ -17,24 +17,27 @@
  * pocket a slot with an arced floor (`pocketArc`), cut with the widest flat end mill the bore takes. Two
  * alike, or two of each angle side by side; either with a ledge for a printed cover, cut with the same bit.
  *
- * The scrap's own front edge is the edge the screws leave through, so nothing is cut
- * out: the bit is jogged to the scrap's front-left corner as for any job.
+ * The board is cut out of the stock it is cut in, once its pockets are cut: it stands a border in from the
+ * stock's edges, so no edge of the stock need be straight or square, and the edge the screws leave through is
+ * one the CNC cut. The bit is jogged to the stock's front-left corner as for any job. Holding tabs keep it in
+ * place, placed as a job's are, on the edge the screws leave through too: a long board needs them there.
  */
-import { pocketArc, pocketChannel, pocketLedge, pocketSlot, screwChannel } from '@/cam/cuts';
+import { contour, outsideLoop, pocketArc, pocketChannel, pocketLedge, pocketSlot, screwChannel, tabCenters } from '@/cam/cuts';
 import { Path, runTime } from '@/cam/path';
+import { DEFAULT_TAB_FROM_CORNER, DEFAULT_TAB_METHOD } from '@/cam/program';
 import { LOW_POCKET, type LowAngle, POCKET, arcLedge, arcShape, lowCoverFits, pocketShape, slotLedge, slotShape } from '@/geometry/pocketHole';
-import type { Id, Mm, SetupProgram, Shop, Tool, ToolpathStep } from '@/model';
-import { activeMachine, cutDiameter, cuttingLengthOf, isBallNose, toolSettings } from '@/plan';
+import type { Id, Mm, Point, SetupProgram, Shop, Tool, ToolpathStep } from '@/model';
+import { activeMachine, cutDiameter, cuttingLengthOf, finishAllowance, holdingTabHeight, isBallNose, throughDepth, toolSettings } from '@/plan';
 import { writeFluidNC } from '@/post/fluidnc';
 
 /** Tune me. */
 export const POCKET_TEST = {
-  /** The least scrap the test needs, front to back; its length follows from the pockets. */
+  /** The board the test cuts out, front to back; its length follows from the pockets. */
   stock: { y: 100 },
-  /** Scrap left past the last pocket. */
-  margin: 50,
-  /** The first pocket's centre from the scrap's left end, and the gap to the next. */
-  first: 70,
+  /** Stock round the board on every side: the kerf that cuts it out and what is left outside it. */
+  border: 20,
+  /** Board left either side of the pockets, which are centred along it: from each end to the nearest pocket's centre. And the gap from one pocket to the next. */
+  side: 60,
   spacing: 40,
   /** How many pockets a test starts with, alike; and the most it may have. */
   count: 2,
@@ -83,15 +86,23 @@ export interface PocketTest {
   text: string;
   /** The stock thickness the test is written for. */
   thickness: Mm;
-  /** One per pocket, left to right: its centre along the edge, its kind, and how long it takes to cut (its ledge with it). */
+  /** One per pocket, left to right: its centre along the board's edge from the board's left end, its kind, and how long it takes to cut (its ledge with it). */
   pockets: (PocketKind & { x: Mm; seconds: number })[];
-  /** The bits it is cut with, in the order they are used. */
-  tools: { toolId: Id; name: string }[];
+  /**
+   * The bits it is cut with, in the order they are used (a bit that goes back in is there twice): how long each
+   * cuts for, and what it cuts at in this material on this machine (feeds in mm/min).
+   */
+  tools: { toolId: Id; name: string; seconds: number; feed: number; plunge: number; depthPerPass: Mm; rpm?: number }[];
   /** Every pocket's seat, from the edge along the screw, and the deepest any goes below the face. */
   seat: Mm;
   depth: Mm;
-  /** The scrap the file is written for, at least. */
+  /** The stock the file is written for, at least. */
   stock: { x: Mm; y: Mm };
+  /** The board cut out of it, and where its front-left corner is from the stock's. */
+  board: { x: Mm; y: Mm };
+  at: Point;
+  /** What cuts the board out, how long that takes, and how many holding tabs it leaves. */
+  cutout: { toolId: Id; name: string; seconds: number; tabs: number };
   /** How far the pilot bit stands out of the drill's chuck, which stops against the guide. */
   bitOutOfChuck: Mm;
 }
@@ -122,10 +133,27 @@ export function pocketTestBits(shop: Pick<Shop, 'tools'>): Tool[] {
   return [...ball, ...flat];
 }
 
-/** How long the scrap must be for a machine: the first pocket clear of the probe's corner, then every pocket and a margin. */
-export function pocketTestStock(machine: { probe: { edgeInset: Mm; clearSquare: Mm } }, pockets: number = POCKET_TEST.count): { x: Mm; y: Mm; first: Mm } {
-  const first = Math.max(POCKET_TEST.first, machine.probe.edgeInset + machine.probe.clearSquare + 20);
-  return { x: first + (pockets - 1) * POCKET_TEST.spacing + POCKET_TEST.margin, y: POCKET_TEST.stock.y, first };
+/**
+ * The stock the test needs on a machine, and the board cut out of it: the pockets centred along the board, the first
+ * clear of the probe's spot (which is on the board's front-left corner); the stock a border bigger all round.
+ */
+export function pocketTestStock(machine: { probe: { edgeInset: Mm; clearSquare: Mm } }, pockets: number = POCKET_TEST.count): { x: Mm; y: Mm; first: Mm; board: { x: Mm; y: Mm }; at: Point } {
+  const first = Math.max(POCKET_TEST.side, machine.probe.edgeInset + machine.probe.clearSquare + 20);
+  const board = { x: 2 * first + (pockets - 1) * POCKET_TEST.spacing, y: POCKET_TEST.stock.y };
+  const b = POCKET_TEST.border;
+  return { x: board.x + 2 * b, y: board.y + 2 * b, first, board, at: { x: b, y: b } };
+}
+
+/**
+ * The flat end mill the board is cut out with, one that reaches through the stock (or whose cutting length is not
+ * given): the bit in the router last (no change then), else the widest the test has already used, else the widest
+ * in the shop.
+ */
+function cutoutBit(shop: Pick<Shop, 'tools'>, materialId: Id, thickness: Mm, used: Tool[]): Tool | undefined {
+  const fits = (t: Tool) => t.shape.kind === 'endMill' && !!t.settings[materialId] && cutDiameter(t) <= POCKET_TEST.border / 2 && (cuttingLengthOf(t)?.mm ?? Infinity) >= thickness - 1e-6;
+  const widest = (list: Tool[]) => list.filter(fits).sort((a, b) => cutDiameter(b) - cutDiameter(a))[0];
+  const last = used.at(-1);
+  return last && fits(last) ? last : (widest(used) ?? widest(shop.tools));
 }
 
 /**
@@ -176,14 +204,17 @@ export function buildPocketTest(shop: Shop, materialId: Id, kinds: PocketKind[] 
   }
 
   const stock = pocketTestStock(machine, kinds.length);
+  // The probe's spot is on the board's own front-left corner, which stays uncut until the board is cut out.
   const half = machine.probe.edgeInset + machine.probe.clearSquare / 2;
-  const spot = { x: half, y: half };
+  const spot = { x: stock.at.x + half, y: stock.at.y + half };
   const pockets = kinds.map((kind, i) => ({ ...kind, x: stock.first + i * POCKET_TEST.spacing, seconds: 0 }));
   // Every 15 degree pocket has its seat in one place; a low-angle pocket has its own, the same in every stock.
   const seatOf = (kind: PocketKind) => (kind.bit === 'arc' ? arcOf(kind).seat : POCKET.seatShare * thickness);
   const seat = seatOf(kinds[0]!);
   const steps: ToolpathStep[] = [];
   const tools: Tool[] = [];
+  /** How long each bit of `tools` cuts for. */
+  const cutting: number[] = [];
   /** One bit's work: for each pocket it has something to cut at, a comment and that cut. */
   const work = (tool: Tool | undefined, cut: (pocket: (typeof pockets)[number], path: Path) => boolean, what: (count: number) => string) => {
     if (!tool) return;
@@ -203,11 +234,13 @@ export function buildPocketTest(shop: Shop, materialId: Id, kinds: PocketKind[] 
     // The same bit straight after itself (a channel cut with the bit that cut the pockets): no change, no probing.
     if (tools.at(-1) !== tool) {
       tools.push(tool);
+      cutting.push(0);
       steps.push({ kind: 'toolChange', toolId: tool.id });
     }
+    cutting[cutting.length - 1]! += seconds;
     steps.push({ kind: 'operation', label: `Pocket-hole test: ${what(count)}`, seconds }, ...made);
   };
-  const exit = (pocket: { x: Mm }) => ({ x: pocket.x, y: 0 });
+  const exit = (pocket: { x: Mm }) => ({ x: stock.at.x + pocket.x, y: stock.at.y });
   const inward = { x: 0, y: 1 };
   const onlyBall = kinds.every((k) => k.bit === 'ball' && !k.ledge);
   /** A 15° pocket whose ledge is cut on its own, before the pocket: round a ball nose's, or round a slot cut with another bit. */
@@ -267,27 +300,64 @@ export function buildPocketTest(shop: Shop, materialId: Id, kinds: PocketKind[] 
     (count) => `${count === 1 ? 'the screw channel' : `${count} screw channels`}, ${narrow!.name.replace(/"/g, ' in')}`,
   );
 
+  // Last, the board cut out of the stock, as a job cuts a part out: outside its line, a finish lap on it, a little
+  // past the stock's bottom, on holding tabs with an up-cut bit.
+  const cutter = cutoutBit(shop, materialId, thickness, tools);
+  if (!cutter) throw new Error(`No flat end mill in the shop profile can cut the board out of ${material.name}: it takes one that cuts ${thickness.toFixed(1)} mm deep.`);
+  const outline = { x0: stock.at.x, y0: stock.at.y, x1: stock.at.x + stock.board.x, y1: stock.at.y + stock.board.y };
+  const diameter = cutDiameter(cutter);
+  const cutFeeds = { ...feedsOf(cutter), finish: finishAllowance(cutter, materialId) };
+  const past = throughDepth(machine, cutter, thickness) - thickness;
+  const upCut = cutter.shape.kind === 'endMill' && cutter.shape.cut === 'up';
+  let tabCount = 0;
+  const tabsFor = (loop: Point[]) => {
+    if (!upCut) return undefined;
+    const centers = tabCenters(loop, machine.tabs.maxSpacing, machine.tabs.width + 3 * diameter, machine.tabs.fromCorner ?? DEFAULT_TAB_FROM_CORNER, machine.tabs.method ?? DEFAULT_TAB_METHOD);
+    tabCount = centers.length;
+    return { centers, flat: machine.tabs.width + diameter, ramp: diameter, topZ: -(thickness - holdingTabHeight(machine, thickness)), height: holdingTabHeight(machine, thickness) + past };
+  };
+  const around = new Path(machine.safeHeight);
+  const rough = outsideLoop(outline, diameter / 2 + cutFeeds.finish);
+  const final = outsideLoop(outline, diameter / 2);
+  contour(around, rough, thickness, cutFeeds, tabsFor(rough), cutFeeds.finish > 0 ? { loop: final, tabs: tabsFor(final) } : undefined, past);
+  const cutoutSeconds = runTime(around.steps, machine.rapidFeed, { ...spot, z: machine.safeHeight }).seconds;
+  if (tools.at(-1) !== cutter) {
+    tools.push(cutter);
+    cutting.push(0);
+    steps.push({ kind: 'toolChange', toolId: cutter.id });
+  }
+  cutting[cutting.length - 1]! += cutoutSeconds;
+  steps.push({ kind: 'operation', label: 'Pocket-hole test: cut the board out', seconds: cutoutSeconds }, ...around.steps);
+  const free = tabCount ? 'Cut its tabs and trim them flush.' : 'Lift the board out.';
+
   const program: SetupProgram = {
     setup: { index: 1, faceUp: 'A', flipBefore: 'none', operationKeys: [], placements: [], pinHoles: [], probeSpot: { at: spot } },
-    blank: { id: 'test', index: 1, count: 1, label: 'Scrap', setupCount: 1 },
+    blank: { id: 'test', index: 1, count: 1, label: 'Stock', setupCount: 1 },
     materialId,
     faces: { summary: 'front face up', mixed: false, groups: [] },
     fileName: POCKET_TEST_FILE,
     stock: { x: stock.x, y: stock.y, z: thickness },
-    toolIds: tools.map((t) => t.id),
+    toolIds: [...new Set(tools.map((t) => t.id))],
     steps,
-    endMessage: kinds.every((k) => k.channel) ? 'Pocket-hole test done. Nothing to drill: screw them up.' : 'Pocket-hole test done. Drill each pilot from the edge with the guide.',
+    endMessage: `Pocket-hole test done. ${free} ${kinds.every((k) => k.channel) ? 'Nothing to drill.' : 'Drill each pilot from the edge with the guide.'}`,
   };
   return {
     name: POCKET_TEST_FILE,
     text: writeFluidNC(program, machine, shop.tools, { project: { name: 'Pocket-hole test (untested experiment)' } }),
     thickness,
     pockets,
-    tools: tools.map((t) => ({ toolId: t.id, name: t.name })),
+    tools: tools.map((t, i) => {
+      const f = feedsOf(t);
+      const rpm = toolSettings(t, materialId).rpm;
+      return { toolId: t.id, name: t.name, seconds: cutting[i]!, feed: f.feed, plunge: f.plunge, depthPerPass: f.depthPerPass, ...(rpm ? { rpm } : {}) };
+    }),
     seat,
     // (A screw channel goes deepest at the edge: half the stock and half the pilot.)
     depth: Math.max(...pockets.map((p) => Math.max(p.bit === 'arc' ? arcOf(p).depth : p.bit === 'flat' ? slot!.depth : round!.depth, p.channel ? thickness / 2 + POCKET.drill / 2 : 0))),
     stock: { x: stock.x, y: stock.y },
+    board: stock.board,
+    at: stock.at,
+    cutout: { toolId: cutter.id, name: cutter.name, seconds: cutoutSeconds, tabs: tabCount },
     // How far the bit stands out follows the seat (the first pocket's, when the kinds are mixed).
     bitOutOfChuck: POCKET.guideOutside + seat + POCKET.through,
   };

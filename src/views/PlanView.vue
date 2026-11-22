@@ -530,9 +530,9 @@ const checks = computed<Check[]>(() => {
               <p>
                 The guide is made for one nominal thickness of stock (3/4", 1/2"): the 3MF holds one for each the job's pocket holes are in, each for {{ pocketSleeveWords }}.
                 <template v-if="pocketMaterial">
-                  The scrap test cuts {{ POCKET_TEST.count }} pockets along the front edge of a piece of
-                  {{ L(pocketMaterial.nominalThickness.mm) }} {{ pocketMaterial.name }} at least
-                  {{ pocketTestStock(store.machine!).x }} × {{ POCKET_TEST.stock.y }} mm, as the job cuts them.
+                  The scrap test cuts {{ POCKET_TEST.count }} pockets along the front edge of a board, as the job cuts them, and
+                  cuts the board out of a piece of {{ L(pocketMaterial.nominalThickness.mm) }} {{ pocketMaterial.name }} at least
+                  {{ pocketTestStock(store.machine!).x }} × {{ pocketTestStock(store.machine!).y }} mm.
                 </template>
               </p>
               <div class="d-flex align-center flex-wrap ga-3">

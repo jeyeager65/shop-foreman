@@ -206,7 +206,7 @@ const gcode = computed<{ files: JigFile[]; error?: string }>(() => {
   }
 });
 /** What the item says about these values, under its sizes. */
-const notes = computed(() => (item.value?.notes && !problems.value.length ? item.value.notes(values.value) : []));
+const notes = computed(() => (item.value?.notes && !problems.value.length ? item.value.notes(values.value, machineId.value) : []));
 /** A test cut in scrap has no solid: its picture is its own G-code, carved out of the scrap. */
 const carved = computed(() => (item.value?.carved ? gcode.value.files[0]?.text : undefined));
 /** Or, where it has one, the scrap once its pilots are drilled by hand, cut away through each pocket: built when shown. */
