@@ -137,6 +137,7 @@ describe('a hold-down clamp', () => {
     expect(notes).toMatch(/3\/4" \(19 mm\) long/);
     expect(notes).toMatch(/3\/4" is engraved in one side/);
     expect(notes).toMatch(/4 walls/);
+    expect(notes).toMatch(/PETG suits it better than PLA/);
     expect(item.problems({ ...item.defaults, stock: 'other', thickness: 2 })).toHaveLength(1);
   });
 });
