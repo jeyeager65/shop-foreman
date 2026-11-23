@@ -21,7 +21,7 @@ import { type PocketCover, buildPocketCover, coverSize, pocketCoverProblems } fr
 import { POCKET_SCREW, type PocketSection, bothUnits, cutTimeWords, farthestSeat, pocketSection } from './pocketSection';
 import { type ScrapView, buildDrilledScrap, testLedge } from './drilledScrap';
 import { GUIDE, GUIDE_PRINT, type PocketGuide, buildPocketGuide, guideAngle, guideBitOut, guideBoss, guideFileName, guideLabel, guideStockName, pocketGuideProblems } from './pocketGuide';
-import { HOLD_DOWN, HOLD_DOWN_PRINT, HOLD_DOWN_STOCK, type HoldDown, buildHoldDownObjects, holdDownFor, holdDownHeights, holdDownLabel, holdDownProblems, holdDownScrew, holdDownSlot } from './holdDown';
+import { HOLD_DOWN, HOLD_DOWN_PRINT, HOLD_DOWN_STOCK, type HoldDown, buildHoldDownObjects, holdDownFor, holdDownHeights, holdDownLabel, holdDownProblems, holdDownScrew } from './holdDown';
 import { buildPrintedHandle } from './printedHandles';
 import { buildSlideJigObjects, slideJigProblems } from './slideJig';
 import { buildSlideShimObjects } from './slideShims';
@@ -713,7 +713,7 @@ export function jigItems(shop: ShopProfile): JigItem[] {
       name: 'Hold-down clamp',
       group: 'Jigs',
       made: 'print',
-      about: "A clamp that holds stock down on the CNC's spoilboard, made for one thickness of stock: a flat strap with a rib up each side, its nose on the stock's top at its edge, its heel on the spoilboard, and a slot between them for a wood screw into the spoilboard.",
+      about: "A clamp that holds stock down on the CNC's spoilboard, made for one thickness of stock. It sits on the spoilboard beside the stock: a flat floor with a slot for a wood screw, a wall at its front against the stock's edge with a lip over the stock, and a triangular side each side bracing the wall.",
       untested: true,
       fields: holdDownFields,
       defaults: { stock: HOLD_DOWN_STOCK[0].id, thickness: 19.05, hole: HOLD_DOWN.hole },
@@ -722,15 +722,15 @@ export function jigItems(shop: ShopProfile): JigItem[] {
       notes: (values, machineId) => {
         const clamps = holdDownsOf(values);
         const safe = (shop.machines.find((m) => m.id === machineId) ?? activeMachine(shopFor({ materials: shop.materialCatalog }, shop))).safeHeight;
-        const heights = holdDownHeights(clamps[0]!);
+        const above = holdDownHeights(clamps[0]!).aboveStock;
         const bought = (mm: Mm) => bothUnits(mm, { ...DEFAULT_UNIT_PREFERENCES, ...shop.units }.sizes);
-        const [near, far] = holdDownSlot().map((x) => x - HOLD_DOWN.lap);
+        const screw = holdDownScrew();
         return [
-          `Over the stock the strap stands ${cnc(heights.strapAboveStock)} above the thinnest it is made for and the ribs up to ${cnc(heights.ribsAboveStock)}, less on thicker stock; behind the stock's edge the ribs rise to ${cnc(HOLD_DOWN.strap + HOLD_DOWN.rib.height - HOLD_DOWN.bite)} above it. The bit travels ${cnc(safe)} above the stock between cuts${safe - heights.ribsAboveStock < 2 ? ', which does not clear the clamp' : ''}: the G-code does not know where the clamps are, so put them where nothing is cut and nothing passes over, or raise the machine's safe height.`,
-          `Screw: a pan or washer head wood screw, ${clamps.map((c) => `${bought(holdDownScrew(c).inches * 25.4)}${clamps.length > 1 ? ` for ${c.name}` : ''} (${cnc(holdDownScrew(c).into)} into the spoilboard)`).join(', ')}, a washer under it if its head is small. A countersunk head would split the strap.`,
-          `The slot puts the screw ${cnc(near!)} to ${cnc(far!)} from the stock's edge: nearest the edge holds hardest. Start the screw, slide the nose over the stock's edge with the heel on the spoilboard, and drive it until the nose bears: the strap is clear of the spoilboard between the two, so it bends a little and holds. It holds down, not sideways: use three or four round a piece.`,
-          `${clamps.length > 1 ? `Each has its stock engraved in its top (${clamps.map(holdDownLabel).join(', ')})` : `${holdDownLabel(clamps[0]!)} is engraved in its top`}, over the heel.`,
-          `It prints lying on its side, without supports: the lower rib on the bed, the strap standing on it, the upper rib growing out of the strap at 45°, and the slot's roof a short bridge. The layers then run the length of the nose. ${printSettingsWords(HOLD_DOWN_PRINT).replace(/^./, (ch) => ch.toUpperCase())} (a first guess). Bambu Studio and OrcaSlicer take these from the file when it is opened, not when it is imported into a plate; set them by hand in another slicer.`,
+          `The lip reaches ${cnc(HOLD_DOWN.lap)} over the stock and stands ${cnc(above)} above the thinnest it is made for, less on thicker stock; nothing else is higher. The bit travels ${cnc(safe)} above the stock between cuts${safe - above < 1 ? ', which does not clear it' : ''}: the G-code does not know where the clamps are, so put them where nothing is cut within ${cnc(HOLD_DOWN.lap)} of the edge.`,
+          `Screw: a pan or washer head wood screw ${bought(screw.inches * 25.4)} long (${cnc(screw.into)} into the spoilboard), whatever the stock: it only goes through the floor. A countersunk head would split the floor.`,
+          `Start the screw, slide the clamp up until its wall is against the stock's edge and its lip is on the stock, and drive the screw down. The lip is a little lower than the stock, so the floor's front lifts and the screw pulls the lip down onto the stock. The slot puts the screw ${cnc(HOLD_DOWN.slot.from)} to ${cnc(HOLD_DOWN.slot.to)} from the stock's edge: nearest the edge holds hardest. Use three or four round a piece.`,
+          `${clamps.length > 1 ? `Each has its stock engraved in the top of its lip (${clamps.map(holdDownLabel).join(', ')})` : `${holdDownLabel(clamps[0]!)} is engraved in the top of its lip`}.`,
+          `It prints lying on its side, without supports: the lip is then a wall, not an overhang. The side that is uppermost is a roof bridged from the floor to the wall, and the slot's roof is a short bridge; if either sags, turn supports on. ${printSettingsWords(HOLD_DOWN_PRINT).replace(/^./, (ch) => ch.toUpperCase())} (a first guess). Bambu Studio and OrcaSlicer take these from the file when it is opened, not when it is imported into a plate; set them by hand in another slicer.`,
         ];
       },
       fileName: 'hold-down-clamp.3mf',

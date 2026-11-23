@@ -6,17 +6,14 @@ import {
   HOLD_DOWN_PRINT,
   HOLD_DOWN_STOCK,
   buildHoldDown,
-  holdDownFloorAt,
   holdDownFor,
   holdDownHeights,
   holdDownLabel,
   holdDownLabelLines,
   holdDownProblems,
   holdDownProfile,
-  holdDownRib,
-  holdDownRibAt,
   holdDownScrew,
-  holdDownSlot,
+  holdDownSide,
 } from '@/jigs/holdDown';
 import { createStarterShopProfile } from '@/libraries';
 
@@ -24,46 +21,49 @@ const area = (loop: [number, number][]) => loop.reduce((n, [x, z], i) => n + (x 
 
 /** A printed hold-down clamp for one thickness of stock, screwed to the spoilboard. */
 describe('a hold-down clamp', () => {
-  it('is a flat strap, its nose a little lower than the thinnest stock sold as its thickness, on a heel at its back', () => {
+  const h = HOLD_DOWN;
+
+  it('sits flat on the spoilboard, a wall at its front with a lip a little lower than the thinnest stock of its thickness', () => {
     const clamp = holdDownFor('3/4', 0);
-    const { under, strapTop } = holdDownHeights(clamp);
-    expect(under).toBeCloseTo(17.8 - HOLD_DOWN.bite, 6);
-    expect(strapTop - under).toBeCloseTo(HOLD_DOWN.strap, 6);
+    const { under, top, aboveStock } = holdDownHeights(clamp);
+    expect(under).toBeCloseTo(17.8 - h.bite, 6);
+    expect(top - under).toBeCloseTo(h.lip, 6);
+    expect(aboveStock).toBeCloseTo(h.lip - h.bite, 6);
     const profile = holdDownProfile(clamp);
     expect(area(profile)).toBeGreaterThan(0);
-    // On the spoilboard only at the heel; from the nose back to the heel nothing is lower than the nose's underside.
-    expect(Math.min(...profile.filter(([, z]) => z === 0).map(([x]) => x))).toBeGreaterThan(HOLD_DOWN.length - HOLD_DOWN.heel);
-    expect(profile.filter(([x]) => x <= HOLD_DOWN.length - HOLD_DOWN.heel).every(([, z]) => z >= under)).toBe(true);
-    // Far from a block: the strap and its heel are under half of the box round them.
-    expect(area(profile)).toBeLessThan(0.5 * HOLD_DOWN.length * strapTop);
+    // Its floor is on the spoilboard from the stock's edge to its back end, and nothing but the lip is over the stock.
+    const onBoard = profile.filter(([, z]) => z === 0).map(([x]) => x);
+    expect([Math.min(...onBoard), Math.max(...onBoard)]).toEqual([h.lap, h.lap + h.length]);
+    expect(profile.filter(([x]) => x < h.lap).every(([, z]) => z >= under)).toBe(true);
+    // Flat in the middle: behind the wall it is only the floor.
+    expect(profile).toContainEqual([h.lap + h.wall, h.floor]);
+    expect(profile).toContainEqual([h.lap + h.length, h.floor]);
   });
 
-  it('has a rib up each side: a triangle from nothing at the tip to its peak beside the slot, leaning in to leave a flat floor', () => {
+  it('has a triangular side each side, from the top of the wall down to the back of the floor', () => {
     const clamp = holdDownFor('3/4', 0);
-    expect(holdDownRibAt(0)).toBe(0);
-    expect(holdDownRibAt(HOLD_DOWN.rib.peak)).toBe(HOLD_DOWN.rib.height);
-    expect(holdDownRibAt(HOLD_DOWN.length)).toBeCloseTo(HOLD_DOWN.rib.back, 6);
-    expect(holdDownRib(clamp)).toHaveLength(4);
-    expect(area(holdDownRib(clamp))).toBeGreaterThan(0);
-    // The peak is beside the slot, and the floor between the ribs takes the screw's head all along the slot.
-    const [from, to] = holdDownSlot();
-    expect(HOLD_DOWN.rib.peak).toBeGreaterThanOrEqual(from);
-    expect(HOLD_DOWN.rib.peak).toBeLessThanOrEqual(to);
-    for (const x of [from, HOLD_DOWN.rib.peak, to]) expect(holdDownFloorAt(x)).toBeGreaterThanOrEqual(HOLD_DOWN.head + 2);
-    expect(to - from).toBe(HOLD_DOWN.slot);
-    expect(to + HOLD_DOWN.head / 2).toBeLessThan(HOLD_DOWN.length - HOLD_DOWN.heel);
+    const { top } = holdDownHeights(clamp);
+    const side = holdDownSide(clamp);
+    expect(area(side)).toBeGreaterThan(area(holdDownProfile(clamp)));
+    // The slope: one straight line from the wall's top to the floor's back end.
+    const i = side.findIndex(([x, z]) => x === h.lap + h.length && z === h.floor);
+    expect(side[i + 1]).toEqual([h.lap + h.wall, top]);
+    // The hollow between the sides takes the screw's head, all along the slot.
+    expect(h.width - 2 * h.side).toBeGreaterThanOrEqual(h.head + 4);
+    expect(h.slot.from - h.head / 2).toBeGreaterThan(h.wall);
+    expect(h.slot.to + h.head / 2).toBeLessThan(h.length);
   });
 
-  it('has its stock engraved in the strap, behind the slot and between the ribs', () => {
+  it('has its stock engraved in the top of its lip', () => {
     expect(holdDownLabel(holdDownFor('3/4', 0))).toBe('3/4"');
     expect(holdDownLabel(holdDownFor('other', 22))).toBe('22mm');
     for (const clamp of [holdDownFor('3/4', 0), holdDownFor('other', 22.5)]) {
       const lines = holdDownLabelLines(clamp);
       expect(lines.length).toBeGreaterThan(3);
       for (const p of lines.flat()) {
-        expect(p.x).toBeGreaterThan(holdDownSlot()[1] + HOLD_DOWN.head / 2);
-        expect(p.x).toBeLessThan(HOLD_DOWN.length - 1);
-        expect(Math.abs(p.y)).toBeLessThan(holdDownFloorAt(p.x) / 2 - 1);
+        expect(p.x).toBeGreaterThan(1);
+        expect(p.x).toBeLessThan(h.lap + h.wall - 1);
+        expect(Math.abs(p.y)).toBeLessThan(h.width / 2 - 1);
       }
     }
   });
@@ -77,31 +77,34 @@ describe('a hold-down clamp', () => {
     expect(holdDownProblems(holdDownFor('3/4', 0, 9))).toHaveLength(1);
   });
 
-  it('names a screw that reaches into the spoilboard', () => {
-    const screw = holdDownScrew(holdDownFor('3/4', 0));
-    expect(screw.inches).toBe(1.25);
-    expect(screw.into).toBeGreaterThanOrEqual(HOLD_DOWN.intoSpoilboard);
-    expect(holdDownScrew(holdDownFor('1/4', 0)).inches).toBe(0.75);
+  it('takes a short screw, through the floor only', () => {
+    const screw = holdDownScrew();
+    expect(screw.inches).toBe(0.75);
+    expect(screw.into).toBeGreaterThanOrEqual(h.intoSpoilboard);
   });
 
-  it('is a closed solid lying on its side, much lighter than a block', async () => {
+  it('is a closed solid lying on its side, hollow between its sides', async () => {
+    for (const id of ['3/4', '1/4']) {
+      const clamp = holdDownFor(id, 0);
+      const mesh = await buildHoldDown(clamp);
+      const p = mesh.positions;
+      const max = [0, 1, 2].map((k) => Math.max(...Array.from({ length: p.length / 3 }, (_, i) => p[i * 3 + k]!)));
+      const min = [0, 1, 2].map((k) => Math.min(...Array.from({ length: p.length / 3 }, (_, i) => p[i * 3 + k]!)));
+      expect(min.map((v) => Math.abs(+v.toFixed(3)))).toEqual([0, 0, 0]);
+      expect(max[0]).toBeCloseTo(h.lap + h.length, 3);
+      expect(max[1]).toBeCloseTo(holdDownHeights(clamp).top, 3);
+      expect(max[2]).toBeCloseTo(h.width, 3);
+      // The middle and the two sides, less the slot and the label.
+      const whole = h.width * area(holdDownProfile(clamp)) + 2 * h.side * (area(holdDownSide(clamp)) - area(holdDownProfile(clamp)));
+      expect(mesh.volume).toBeLessThan(whole - (h.slot.to - h.slot.from) * clamp.hole * h.floor);
+      expect(mesh.volume).toBeGreaterThan(whole * 0.9);
+    }
     const clamp = holdDownFor('3/4', 0);
     const mesh = await buildHoldDown(clamp);
-    const p = mesh.positions;
-    const max = [0, 1, 2].map((k) => Math.max(...Array.from({ length: p.length / 3 }, (_, i) => p[i * 3 + k]!)));
-    const min = [0, 1, 2].map((k) => Math.min(...Array.from({ length: p.length / 3 }, (_, i) => p[i * 3 + k]!)));
-    expect(min.map((v) => Math.abs(+v.toFixed(3)))).toEqual([0, 0, 0]);
-    expect(max[0]).toBeCloseTo(HOLD_DOWN.length, 3);
-    expect(max[1]).toBeCloseTo(holdDownHeights(clamp).top, 3);
-    expect(max[2]).toBeCloseTo(HOLD_DOWN.width, 3);
-    // The strap and heel less the slot and the label, plus the two ribs; under 40% of the box round it.
-    const strap = HOLD_DOWN.width * area(holdDownProfile(clamp));
-    expect(mesh.volume).toBeGreaterThan(strap);
-    expect(mesh.volume).toBeLessThan(strap + 2 * area(holdDownRib(clamp)) * (HOLD_DOWN.rib.top + HOLD_DOWN.rib.height));
-    expect(mesh.volume).toBeLessThan(0.4 * max[0]! * max[1]! * max[2]!);
+    // Not a block: well under its sides' outline pushed out to its width.
+    expect(mesh.volume).toBeLessThan(0.6 * h.width * area(holdDownSide(clamp)));
     // Without its label it would be heavier by the engraving.
-    const plain = await buildHoldDown({ ...clamp, name: 'x' });
-    expect(plain.volume).toBeGreaterThan(mesh.volume + 1);
+    expect((await buildHoldDown({ ...clamp, name: 'x' })).volume).toBeGreaterThan(mesh.volume + 1);
   });
 
   it('is on the jigs page: one clamp, or one for each stock, each with its print settings', async () => {
@@ -115,8 +118,8 @@ describe('a hold-down clamp', () => {
     expect(item.fileNameFor!(item.defaults)).toBe('hold-down-clamp-3-4.3mf');
     expect(item.fileNameFor!(each)).toBe('hold-down-clamps.3mf');
     const notes = item.notes!(item.defaults).join(' ');
-    expect(notes).toMatch(/1-1\/4" \(31\.8 mm\)/);
-    expect(notes).toMatch(/3\/4" is engraved in its top/);
+    expect(notes).toMatch(/3\/4" \(19 mm\) long/);
+    expect(notes).toMatch(/3\/4" is engraved in the top of its lip/);
     expect(notes).toMatch(/4 walls/);
     expect(item.problems({ ...item.defaults, stock: 'other', thickness: 2 })).toHaveLength(1);
   });
