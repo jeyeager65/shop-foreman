@@ -49,8 +49,9 @@ describe('a pocket in section', () => {
     // A slot for the screw adds to its pocket's time.
     const seconds = (way: string) => buildPocketTest(createStarterShop(), PLYWOOD_3_4_ID, [{ bit: 'flat', ledge: false, channel: way === 'channel' }], 'endmill-1-8').pockets[0]!.seconds;
     expect(seconds('channel')).toBeGreaterThan(seconds('drilled'));
-    expect(cutTimeWords(83)).toBe('1 min 25 s');
-    expect(cutTimeWords(42)).toBe('40 s');
+    expect(cutTimeWords(83.4)).toBe('1 min 23 s');
+    expect(cutTimeWords(42)).toBe('42 s');
+    expect(cutTimeWords(120)).toBe('2 min');
   });
 });
 
