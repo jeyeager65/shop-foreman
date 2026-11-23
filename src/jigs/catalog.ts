@@ -21,6 +21,7 @@ import { type PocketCover, buildPocketCover, coverSize, pocketCoverProblems } fr
 import { POCKET_SCREW, type PocketSection, bothUnits, cutTimeWords, farthestSeat, pocketSection } from './pocketSection';
 import { type ScrapView, buildDrilledScrap, testLedge } from './drilledScrap';
 import { GUIDE, GUIDE_PRINT, type PocketGuide, buildPocketGuide, guideAngle, guideBitOut, guideBoss, guideFileName, guideLabel, guideStockName, pocketGuideProblems } from './pocketGuide';
+import { HOLD_DOWN, HOLD_DOWN_PRINT, HOLD_DOWN_STOCK, type HoldDown, buildHoldDownObjects, holdDownFor, holdDownHeights, holdDownLabel, holdDownProblems, holdDownScrew, holdDownSlot } from './holdDown';
 import { buildPrintedHandle } from './printedHandles';
 import { buildSlideJigObjects, slideJigProblems } from './slideJig';
 import { buildSlideShimObjects } from './slideShims';
@@ -193,6 +194,8 @@ async function woodHandleObject(handle: Handle, thickness: Mm, wasmUrl?: string)
  */
 /** The drill guide's choice of angle that prints a guide for every angle. */
 const EVERY_ANGLE = 'all';
+/** The hold-down clamp's choice of a clamp for every stock. */
+const EVERY_STOCK = 'all';
 
 export function jigItems(shop: ShopProfile): JigItem[] {
   const handles = shop.hardware.filter((h): h is Handle => h.kind === 'handle' && !!(h.printed ?? h.cnc));
@@ -427,6 +430,24 @@ export function jigItems(shop: ShopProfile): JigItem[] {
   };
   /** Every guide these sizes print: one, or one for each angle. */
   const guidesOf = (values: JigValues): PocketGuide[] => (values.angle === EVERY_ANGLE ? [POCKET.angleDeg, ...LOW_POCKET.angles].map((a) => guideOf(values, a)) : [guideOf(values)]);
+  const holdDownFields: JigField[] = [
+    {
+      key: 'stock',
+      label: 'Made for',
+      kind: 'choice',
+      choices: [
+        ...HOLD_DOWN_STOCK.map((st) => ({ title: `${st.name} stock: ${st.from} to ${st.to} mm thick`, value: st.id })),
+        { title: 'Another thickness', value: 'other' },
+        { title: `One of each: ${HOLD_DOWN_STOCK.map((st) => st.name).join(', ')}`, value: EVERY_STOCK },
+      ],
+      hint: 'One clamp does every stock sold as that thickness, plywood or solid.',
+    },
+    { key: 'thickness', label: 'Stock thickness', kind: 'mm', hint: 'Measured: the thinnest it will hold.', when: (values) => values.stock === 'other' },
+    { key: 'hole', label: "Screw's slot", kind: 'mm', hint: 'Across. Loose on the screw: 4.6 mm for a #8.' },
+  ];
+  /** Every clamp these sizes print: one, or one for each stock. */
+  const holdDownsOf = (values: JigValues): HoldDown[] =>
+    (values.stock === EVERY_STOCK ? HOLD_DOWN_STOCK.map((st) => st.id as string) : [String(values.stock)]).map((id) => holdDownFor(id, num(values, 'thickness'), num(values, 'hole')));
   const shopSleeve = shop.pocketSleeve ?? POCKET_SLEEVE;
   const testStock = shop.materialCatalog.find((m) => m.groupId === 'plywood' && m.measuredThickness.mm > 15) ?? shop.materialCatalog[0];
   const testSize = (machineId?: Id) => pocketTestStock(shop.machines.find((m) => m.id === machineId) ?? activeMachine(shopFor({ materials: shop.materialCatalog }, shop)));
@@ -686,6 +707,34 @@ export function jigItems(shop: ShopProfile): JigItem[] {
       problems: (values) => slideJigProblems(num(values, 'height')),
       build: async (values) => buildSlideJigObjects([{ height: num(values, 'height'), quantity: 1 }]),
       fileName: 'slide-jig.3mf',
+    },
+    {
+      id: 'hold-down',
+      name: 'Hold-down clamp',
+      group: 'Jigs',
+      made: 'print',
+      about: "A clamp that holds stock down on the CNC's spoilboard, made for one thickness of stock: a flat strap with a rib up each side, its nose on the stock's top at its edge, its heel on the spoilboard, and a slot between them for a wood screw into the spoilboard.",
+      untested: true,
+      fields: holdDownFields,
+      defaults: { stock: HOLD_DOWN_STOCK[0].id, thickness: 19.05, hole: HOLD_DOWN.hole },
+      problems: (values) => [...new Set(holdDownsOf(values).flatMap(holdDownProblems))],
+      build: (values, wasmUrl) => buildHoldDownObjects(holdDownsOf(values), wasmUrl),
+      notes: (values, machineId) => {
+        const clamps = holdDownsOf(values);
+        const safe = (shop.machines.find((m) => m.id === machineId) ?? activeMachine(shopFor({ materials: shop.materialCatalog }, shop))).safeHeight;
+        const heights = holdDownHeights(clamps[0]!);
+        const bought = (mm: Mm) => bothUnits(mm, { ...DEFAULT_UNIT_PREFERENCES, ...shop.units }.sizes);
+        const [near, far] = holdDownSlot().map((x) => x - HOLD_DOWN.lap);
+        return [
+          `Over the stock the strap stands ${cnc(heights.strapAboveStock)} above the thinnest it is made for and the ribs up to ${cnc(heights.ribsAboveStock)}, less on thicker stock; behind the stock's edge the ribs rise to ${cnc(HOLD_DOWN.strap + HOLD_DOWN.rib.height - HOLD_DOWN.bite)} above it. The bit travels ${cnc(safe)} above the stock between cuts${safe - heights.ribsAboveStock < 2 ? ', which does not clear the clamp' : ''}: the G-code does not know where the clamps are, so put them where nothing is cut and nothing passes over, or raise the machine's safe height.`,
+          `Screw: a pan or washer head wood screw, ${clamps.map((c) => `${bought(holdDownScrew(c).inches * 25.4)}${clamps.length > 1 ? ` for ${c.name}` : ''} (${cnc(holdDownScrew(c).into)} into the spoilboard)`).join(', ')}, a washer under it if its head is small. A countersunk head would split the strap.`,
+          `The slot puts the screw ${cnc(near!)} to ${cnc(far!)} from the stock's edge: nearest the edge holds hardest. Start the screw, slide the nose over the stock's edge with the heel on the spoilboard, and drive it until the nose bears: the strap is clear of the spoilboard between the two, so it bends a little and holds. It holds down, not sideways: use three or four round a piece.`,
+          `${clamps.length > 1 ? `Each has its stock engraved in its top (${clamps.map(holdDownLabel).join(', ')})` : `${holdDownLabel(clamps[0]!)} is engraved in its top`}, over the heel.`,
+          `It prints lying on its side, without supports: the lower rib on the bed, the strap standing on it, the upper rib growing out of the strap at 45°, and the slot's roof a short bridge. The layers then run the length of the nose. ${printSettingsWords(HOLD_DOWN_PRINT).replace(/^./, (ch) => ch.toUpperCase())} (a first guess). Bambu Studio and OrcaSlicer take these from the file when it is opened, not when it is imported into a plate; set them by hand in another slicer.`,
+        ];
+      },
+      fileName: 'hold-down-clamp.3mf',
+      fileNameFor: (values) => (values.stock === EVERY_STOCK ? 'hold-down-clamps.3mf' : `hold-down-clamp-${slug(holdDownsOf(values)[0]!.name)}.3mf`),
     },
   ];
   const kit: JigItem[] = [

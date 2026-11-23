@@ -32,6 +32,7 @@ describe('the catalog of things that are not cabinet parts', () => {
       ['Jigs', 'tab-test', 'cnc'],
       ['Jigs', 'slide-shims', 'print'],
       ['Jigs', 'slide-jig', 'print'],
+      ['Jigs', 'hold-down', 'print'],
       ['Jigs', 'shelf-pin-jig', 'print'],
       ['Jigs', 'hinge-cup-jig', 'print'],
       ['Jigs', 'pull-template', 'print'],
