@@ -41,6 +41,11 @@ export const POCKET = {
   /** The tallest ridge the finishing passes may leave between them on the seat, where the screw's head bears. */
   ridge: 0.1,
   /**
+   * How far each step of a seat cut with a flat end mill's side may stand proud of the seat's slope. The screw's head
+   * beds into steps this size; the seat's place and its angle are what the joint needs.
+   */
+  seatStep: 0.2,
+  /**
    * The tallest ridge the finishing lines may leave between them on the floor. Coarser than the seat's: the
    * floor only has to clear the screw's head and the driver now that nothing lies on it (the guide's key
    * stands above the axis, between the walls, which the outermost two lines always cut).

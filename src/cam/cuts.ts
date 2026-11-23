@@ -924,16 +924,15 @@ export function pocketSlot(path: Path, exit: Point, inward: Point, slot: SlotSha
   path.retract();
 
   // The seat: the bit's side against it at the bit's own depth, a step down its slope each time. Each step
-  // stands no more than `ridge` proud of the slope. It starts in the middle, where the roughing has been.
-  const steps = Math.max(1, Math.ceil((depth * tan) / POCKET.ridge - 1e-9));
+  // stands no more than `seatStep` proud of the slope. It starts at one wall, which the roughing has been along.
+  const steps = Math.max(1, Math.ceil((depth * tan) / POCKET.seatStep - 1e-9));
   let side = 1;
   for (let j = 1; j <= steps; j++) {
     const z = -(depth * j) / steps;
     const u = slotSeatAt(slot, z) + r;
     if (j === 1) {
-      path.moveTo(at(u, 0, 0));
+      path.moveTo(at(u, reach, 0));
       path.cut({ z }, f.plunge);
-      path.cut(at(u, reach, z), f.feed);
     } else {
       path.cut(at(u, side * reach, z), f.plunge);
     }
@@ -1017,7 +1016,8 @@ export function pocketArc(path: Path, exit: Point, inward: Point, shape: ArcShap
     const order = down ? us : [...us].reverse();
     if (k > 0) path.cut(at(order[0]!, y, floor(order[0]!)), f.feed);
     let was = at(order[0]!, y, k > 0 ? floor(order[0]!) : POCKET_TOP_CLEAR);
-    for (const u of order) {
+    // Across from the line before, the bit is already at this line's first point.
+    for (const u of k > 0 ? order.slice(1) : order) {
       const to = at(u, y, floor(u));
       if (down) ramp(was, to);
       else path.cut(to, f.feed);
@@ -1028,15 +1028,15 @@ export function pocketArc(path: Path, exit: Point, inward: Point, shape: ArcShap
 
   // The seat: the bit's side against it at the bit's own depth, a step down its slope each time.
   const tan = shape.sin / shape.cos;
-  const steps = Math.max(1, Math.ceil((depth * tan) / POCKET.ridge - 1e-9));
+  // No step deeper than a pass of the bit: at a low angle the slope alone would allow steps far apart.
+  const steps = Math.max(1, Math.ceil((depth * tan) / POCKET.seatStep - 1e-9), Math.ceil(depth / f.depthPerPass - 1e-9));
   let side = 1;
   for (let j = 1; j <= steps; j++) {
     const z = -(depth * j) / steps;
     const u = arcSeatAt(shape, z) + r;
     if (j === 1) {
-      path.moveTo(at(u, 0, 0));
+      path.moveTo(at(u, reach, 0));
       path.cut({ z }, f.plunge);
-      if (reach > EPS) path.cut(at(u, reach, z), f.feed);
     } else {
       path.cut(at(u, side * reach, z), f.plunge);
     }
