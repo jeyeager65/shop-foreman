@@ -18,7 +18,7 @@ import { INSERT_PLAY, INSERT_UNDER, type Caddy, type Dividers, type KnifeInsert,
 import { type DowelJig, type HingeCupJig, type PullTemplate, type ShelfPinJig, buildDowelJig, buildHingeCupJig, buildPullTemplate, buildShelfPinJig, dowelJigProblems, hingeCupJigProblems, pullTemplateProblems, shelfPinJigProblems } from './drillJigs';
 import { buildInstallKitObjects } from './installKit';
 import { type PocketCover, buildPocketCover, coverSize, pocketCoverProblems } from './pocketCover';
-import { POCKET_SCREW, type PocketSection, bothUnits, farthestSeat, pocketSection } from './pocketSection';
+import { POCKET_SCREW, type PocketSection, bothUnits, cutTimeWords, farthestSeat, pocketSection } from './pocketSection';
 import { type ScrapView, buildDrilledScrap, testLedge } from './drilledScrap';
 import { GUIDE, GUIDE_PRINT, type PocketGuide, buildPocketGuide, guideAngle, guideBitOut, guideBoss, guideFileName, guideLabel, guideStockName, pocketGuideProblems } from './pocketGuide';
 import { buildPrintedHandle } from './printedHandles';
@@ -105,7 +105,8 @@ export interface JigItem {
   /** What is kept under the page's "How this works": explanations that need not be in sight. */
   help?(values: JigValues): string[];
   /** The scrap test's pockets in section, each kind once, with the pockets it stands for. */
-  sections?(values: JigValues): { title: string; section: PocketSection }[];
+  /** `time`: how long one such pocket takes to cut, in words. */
+  sections?(values: JigValues, machineId?: Id): { title: string; section: PocketSection; time?: string }[];
   /** The pocket-hole guide: what the page's moving picture of it in use is drawn from. */
   inUse?(values: JigValues): PocketGuide;
   /** A handle of the shop's library: "Save to the shop profile" writes the values back to it. */
@@ -479,8 +480,15 @@ export function jigItems(shop: ShopProfile): JigItem[] {
       untested: true,
       single: true,
       fields: testFields,
-      sections: (values) => {
+      sections: (values, machineId) => {
         const kinds = testKinds(values);
+        // How long each pocket takes on the machine the G-code is posted for: its ledge and its channel with it, bit changes apart.
+        let seconds: number[] = [];
+        try {
+          seconds = buildPocketTest(shopFor({ materials: shop.materialCatalog, machineId }, shop), String(values.materialId), kinds, String(values.bit)).pockets.map((p) => p.seconds);
+        } catch {
+          // What cannot be made is said by the G-code card.
+        }
         const tool = scrapBits.find((t) => t.id === values.bit);
         const width = tool ? cutDiameter(tool) : lowBitWidth;
         // Each kind once (its angle, seat and screw's way), named by the pockets that are it.
@@ -493,7 +501,10 @@ export function jigItems(shop: ShopProfile): JigItem[] {
           const k = kinds[list[0]!]!;
           const names = list.map((i) => i + 1);
           const title = names.length === 1 ? `Pocket ${names[0]}` : `Pockets ${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
-          return { title, section: pocketSection(scrapThickness(values), k.bit === 'arc' ? (k.angleDeg ?? 3) : POCKET.angleDeg, k.seat, width, !!k.channel, shop.materialCatalog.find((m) => m.id === values.materialId)?.groupId === 'solid-wood') };
+          // Pockets drawn as one may differ in time (one with a ledge): then from the quickest to the slowest.
+          const took = [...new Set(list.map((i) => seconds[i]).filter((n): n is number => n !== undefined).sort((x, y) => x - y).map(cutTimeWords))];
+          const time = took.length ? `${took.length > 1 ? `${took[0]} to ${took.at(-1)}` : took[0]}${list.length > 1 ? ' each' : ''}` : undefined;
+          return { title, time, section: pocketSection(scrapThickness(values), k.bit === 'arc' ? (k.angleDeg ?? 3) : POCKET.angleDeg, k.seat, width, !!k.channel, shop.materialCatalog.find((m) => m.id === values.materialId)?.groupId === 'solid-wood') };
         });
       },
       defaults: { materialId: testStock?.id ?? '', bit: scrapBits[0]?.id ?? '', ledgeBit: ledgeBits[0]?.id ?? '', pockets: TEST_START },

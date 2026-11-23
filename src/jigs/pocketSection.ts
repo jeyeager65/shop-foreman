@@ -110,3 +110,9 @@ export const mmBy10 = (mm: Mm): string => `${+mm.toFixed(1)} mm`;
 export function bothUnits(mm: Mm, first: LengthDisplay): string {
   return first.kind === 'mm' ? `${mmBy10(mm)} (${inchesBy16(mm)})` : `${inchesBy16(mm)} (${mmBy10(mm)})`;
 }
+/** How long a cut takes, in words: to the 5 seconds, "45 s" or "1 min 20 s". */
+export function cutTimeWords(seconds: number): string {
+  const s = Math.max(5, Math.round(seconds / 5) * 5);
+  const [min, rest] = [Math.floor(s / 60), s % 60];
+  return [min ? `${min} min` : '', rest ? `${rest} s` : ''].filter(Boolean).join(' ');
+}

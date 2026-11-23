@@ -2,7 +2,7 @@
 /**
  * A pocket hole in section (`PocketSection`): the board and the other part it is screwed to, the pocket, the screw
  * lying in it with its head on the seat, and its pilot (drilled) or channel (cut open). Drawn to scale in mm, the
- * face the pocket is cut in at the top. Under it: the seat's distance and how much screw goes into the other part.
+ * face the pocket is cut in at the top. Under it: the seat's distance, how much screw goes into the other part, and how long the pocket takes to cut.
  */
 import { computed, useId } from 'vue';
 import type { PocketSection } from '@/jigs/pocketSection';
@@ -10,7 +10,7 @@ import { POCKET_SCREW, bothUnits } from '@/jigs/pocketSection';
 import { POCKET } from '@/geometry/pocketHole';
 import { useAppStore } from '@/stores/app';
 
-const props = defineProps<{ section: PocketSection; title: string }>();
+const props = defineProps<{ section: PocketSection; title: string; time?: string }>();
 const store = useAppStore();
 /** Its lengths as the rest of the scrap test's page, in both units: what is cut and measured the CNC unit first, the screw as bought. */
 const L = computed(() => (mm: number) => bothUnits(mm, store.units.cnc));
@@ -132,6 +132,7 @@ const screwTransform = computed(() => `translate(0 ${(t.value / 2).toFixed(2)}) 
       <span class="font-weight-medium">{{ title }}</span>
       <span class="text-medium-emphasis"> · seat {{ L(s.seat) }} · {{ screwName(s.screw) }} {{ s.screwKind === 'castle' ? '#7' : '#8' }}{{ s.fine ? ' fine' : '' }} · </span>
       <span :class="s.short || s.through ? 'text-warning' : 'text-medium-emphasis'">{{ L(s.into) }} in<template v-if="s.short">, too little</template><template v-else-if="s.through">, comes through</template></span>
+      <span v-if="time" class="text-medium-emphasis" data-test="section-time"> · cuts in {{ time }}</span>
     </figcaption>
   </figure>
 </template>

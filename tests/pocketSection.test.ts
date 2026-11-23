@@ -2,8 +2,9 @@
 import { describe, expect, it } from 'vitest';
 import { LOW_POCKET, POCKET } from '@/geometry/pocketHole';
 import { jigItems } from '@/jigs/catalog';
-import { POCKET_SCREW, bothUnits, farthestSeat, inchesBy16, pocketSection } from '@/jigs/pocketSection';
-import { createStarterShopProfile } from '@/libraries';
+import { POCKET_SCREW, bothUnits, cutTimeWords, farthestSeat, inchesBy16, pocketSection } from '@/jigs/pocketSection';
+import { buildPocketTest } from '@/job/pocketTest';
+import { PLYWOOD_3_4_ID, createStarterShop, createStarterShopProfile } from '@/libraries';
 import { MM_PER_INCH } from '@/units';
 
 /** A pocket hole in section: the screw leaves the edge at mid-thickness, and the seat says how much of it goes into the other part. */
@@ -43,6 +44,13 @@ describe('a pocket in section', () => {
     // And the page draws each kind once.
     const values = { ...test.defaults, bit: 'endmill-1-8', pockets: JSON.stringify([{ angle: '3' }, { angle: '15' }, { angle: '15' }]) };
     expect(test.sections!(values).map((s) => s.title)).toEqual(['Pocket 1', 'Pockets 2 and 3']);
+    // Under each, how long one such pocket takes to cut.
+    expect(test.sections!(values).map((s) => s.time)).toEqual([expect.stringMatching(/^(\d+ min)?( ?\d+ s)?$/), expect.stringMatching(/ each$/)]);
+    // A slot for the screw adds to its pocket's time.
+    const seconds = (way: string) => buildPocketTest(createStarterShop(), PLYWOOD_3_4_ID, [{ bit: 'flat', ledge: false, channel: way === 'channel' }], 'endmill-1-8').pockets[0]!.seconds;
+    expect(seconds('channel')).toBeGreaterThan(seconds('drilled'));
+    expect(cutTimeWords(83)).toBe('1 min 25 s');
+    expect(cutTimeWords(42)).toBe('40 s');
   });
 });
 

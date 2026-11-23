@@ -85,7 +85,7 @@ const help = computed(() => {
 /** The scrap test's pockets in section, each kind once. */
 const sections = computed(() => {
   try {
-    return item.value?.sections?.(values.value) ?? [];
+    return item.value?.sections?.(values.value, machineId.value) ?? [];
   } catch {
     return [];
   }
@@ -424,7 +424,7 @@ const madeWords = (i: JigItem) => (i.made === 'print' ? '3D print' : 'Cut on the
             <StockCarveView v-else :gcode="carved" data-test="jig-carved" />
             <!-- The pockets in section, through each screw: what the angle and the seat do. -->
             <div v-if="sections.length" class="sections mt-3" data-test="jig-sections">
-              <PocketSectionView v-for="sec in sections" :key="sec.title" :title="sec.title" :section="sec.section" />
+              <PocketSectionView v-for="sec in sections" :key="sec.title" :title="sec.title" :section="sec.section" :time="sec.time" />
             </div>
             <div class="text-caption text-medium-emphasis mt-2">
               <template v-if="scrapView === 'screwed' && item.drilled">The scrap screwed to another board standing against its edge, both seen through: each pocket's screw with its head on the seat. Drag to turn, scroll to zoom.</template>
