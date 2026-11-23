@@ -8,7 +8,7 @@ import {
   supportBlockProfile,
   supportBlockVolume,
 } from '@/jigs/installKit';
-import { modelXml } from '@/jigs/threemf';
+import { modelXml, printSettingsWords, slicerSettingsXml, write3mf } from '@/jigs/threemf';
 import { crc32, zip } from '@/jigs/zip';
 import { installKit } from '@/plan';
 import { createVanityProject } from '@/samples/vanity';
@@ -118,6 +118,30 @@ describe('install kit', () => {
         });
       }
       expect([...edges.values()].every((count) => count === 2)).toBe(true);
+    }
+  });
+
+  it("carries a solid's own print settings beside the model, for the slicers that read them", async () => {
+    const [block, shim] = await buildInstallKitObjects(kit);
+    const print = { walls: 4, topLayers: 5, bottomLayers: 5, infillPercent: 40, infillPattern: 'gyroid' as const, layerHeight: 0.2 };
+    expect(printSettingsWords(print)).toBe('4 walls, 5 top and 5 bottom layers, 40% gyroid infill, 0.2 mm layers');
+    // None has any: the file is the model alone.
+    expect(slicerSettingsXml([block!, shim!])).toBeUndefined();
+    // The block is on the bed twice: an object for each copy, each with the settings; the shim has none.
+    expect(block!.placements).toHaveLength(2);
+    const files = unzip(write3mf([{ ...block!, print }, shim!]));
+    expect(Object.keys(files)).toEqual(['[Content_Types].xml', '_rels/.rels', '3D/3dmodel.model', 'Metadata/model_settings.config']);
+    expect(files['[Content_Types].xml']).toContain('Extension="config"');
+    const model = files['3D/3dmodel.model']!;
+    expect(model.match(/<object /g)).toHaveLength(3);
+    for (const id of [1, 2, 3]) expect(model.match(new RegExp(`<item objectid="${id}"`, 'g'))).toHaveLength(1);
+    // Nothing says another program wrote it, which would change how a slicer opens it.
+    expect(model).not.toMatch(/BambuStudio|OrcaSlicer|PrusaSlicer/);
+    const settings = files['Metadata/model_settings.config']!;
+    expect(settings.match(/<object id="[12]">/g)).toHaveLength(2);
+    expect(settings).not.toContain('<object id="3">');
+    for (const line of ['key="wall_loops" value="4"', 'key="top_shell_layers" value="5"', 'key="bottom_shell_layers" value="5"', 'key="sparse_infill_density" value="40%"', 'key="sparse_infill_pattern" value="gyroid"', 'key="layer_height" value="0.2"']) {
+      expect(settings.match(new RegExp(line, 'g'))).toHaveLength(2);
     }
   });
 });

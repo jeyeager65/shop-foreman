@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { LOWRIDER_3 } from './lowRider';
 import { pocketChannel, pocketLedge, pocketSlot } from '@/cam/cuts';
 import { type Feeds, Path, runTime } from '@/cam/path';
-import { arcFloorAt, arcLedge, arcSeatAt, arcShape, lowCoverFits, slotLedge, GUIDE_STOCK, KEY_RADIUS, POCKET, POCKET_SLEEVE, SLEEVE_LIMITS, bitOutOfChuck, fenceFlangeAt, jigSleeve, sleeveGoesIn, sleeveParams, sleeveProblems, sleeveRoom, sleeveWords, floorAt, guideStock, guideThickness, onAxis, onLine, pocketAxis, pocketShape, slotFloorAt, slotOpening, slotSeatAt, slotShape, slotSlopeEnd } from '@/geometry/pocketHole';
+import { arcFloorAt, arcLedge, arcSeatAt, arcShape, lowCoverFits, slotLedge, GUIDE_STOCK, KEY_RADIUS, POCKET, POCKET_SLEEVE, SLEEVE_LIMITS, bitOutOfChuck, boreOutside, fenceFlangeAt, jigSleeve, sleeveGoesIn, sleeveParams, sleeveProblems, sleeveRoom, sleeveWords, floorAt, guideStock, guideThickness, onAxis, onLine, pocketAxis, pocketShape, slotFloorAt, slotOpening, slotSeatAt, slotShape, slotSlopeEnd } from '@/geometry/pocketHole';
 import { loadGCodeTools } from '@/gcode/gcodeTools';
 import { buildChecklist } from '@/job/checklist';
 import { cabinetsOf, designsOf, projectShows } from '@/design';
@@ -11,7 +11,8 @@ import { buildJob } from '@/job/buildJob';
 import { buildLists } from '@/job/lists';
 import { POCKET_KINDS, POCKET_TEST, buildPocketTest, pocketTestBits } from '@/job/pocketTest';
 import { COVER, buildPocketCover, coverSize, pocketCoverProblems } from '@/jigs/pocketCover';
-import { GUIDE, IN_USE, buildPocketGuide, buildPocketGuide3mf, buildPocketGuideInUse, buildPocketGuideObjects, guideBoss, guideBitOut, guideSleeves, guideInUseAt, guideKeyNose, guidePlateIn, pocketGuideProblems } from '@/jigs/pocketGuide';
+import { GUIDE, IN_USE, buildPocketGuide, buildPocketGuide3mf, buildPocketGuideInUse, buildPocketGuideObjects, guideBoss, guideBitOut, guideFileName, guideLabel, guideSleeves, guideInUseAt, guideKeyNose, guidePlateIn, pocketGuideProblems } from '@/jigs/pocketGuide';
+import { strokeTextDraws } from '@/jigs/strokeText';
 import { PLYWOOD_3_4_ID } from '@/libraries';
 import type { CabinetDesign, ConstructionStyle, DrawerDesign, Feature, Part, PocketCoverWhere, PocketSleeve, Project, Shop } from '@/model';
 import { pocketCovered, pocketCoversOf } from '@/plan/parts';
@@ -338,7 +339,7 @@ describe('the face frame reference cabinet, CNC-assisted', () => {
     const list = buildChecklist(project, built.plan, built.programs, shop.tools, activeMachine(shop));
     expect(list.filter((s) => /pocket-hole/.test(s))).toEqual([
       'Print the pocket-hole guide and push a metal sleeve (4.1 × 7 × 20 mm) into it: from the back, up to its stop (untested experiment).',
-      expect.stringMatching(/^Drill 32 pocket-hole pilots in the 18\.3 mm parts from the edge: a 4 mm or 5\/32" bit standing 38\.7 mm out of the chuck\..*pull its leg tight against the edge/),
+      expect.stringMatching(/^Drill 32 pocket-hole pilots in the 18\.3 mm parts from the edge: a 4 mm or 5\/32" bit standing 38.7 mm out of the chuck\..*pull its leg tight against the edge/),
     ]);
   });
 });
@@ -673,6 +674,23 @@ describe('the printed cover', () => {
   });
 });
 
+/** Whether a point is inside a solid: a ray along +X from it crosses the surface an odd number of times. */
+function inSolid(mesh: { positions: ArrayLike<number>; triangles: ArrayLike<number> }, x: number, y: number, z: number): boolean {
+  const [p, tri] = [mesh.positions, mesh.triangles];
+  let crossings = 0;
+  for (let i = 0; i < tri.length; i += 3) {
+    const [a, b, c] = [tri[i]! * 3, tri[i + 1]! * 3, tri[i + 2]! * 3];
+    const [ay, az, by, bz, cy, cz] = [p[a + 1]! - y, p[a + 2]! - z, p[b + 1]! - y, p[b + 2]! - z, p[c + 1]! - y, p[c + 2]! - z];
+    const d = (by - ay) * (cz - az) - (cy - ay) * (bz - az);
+    if (Math.abs(d) < 1e-12) continue;
+    const u = (cy * az - ay * cz) / d;
+    const v = (ay * bz - by * az) / d;
+    if (u < 0 || v < 0 || u + v > 1) continue;
+    if (p[a]! + u * (p[b]! - p[a]!) + v * (p[c]! - p[a]!) > x) crossings += 1;
+  }
+  return crossings % 2 === 1;
+}
+
 describe('the printed guide', () => {
   const guide = { thickness: len('23/32"').mm, drill: 4 };
   const box = (mesh: { positions: Float32Array }) => {
@@ -697,13 +715,18 @@ describe('the printed guide', () => {
     // From the boss's back outside the edge to the plate's far end.
     expect(long).toBeGreaterThan(guidePlateIn(guide.thickness) + POCKET.guideOutside * 0.9);
     expect(long).toBeLessThan(guidePlateIn(guide.thickness) + POCKET.guideOutside + GUIDE.boss);
-    // No bigger than it has to be: the plate ends just past the key, about 40 mm in, and it is under 15 cm3.
-    expect(guidePlateIn(guide.thickness)).toBeLessThan(42);
-    expect(guidePlateIn(12.3)).toBeLessThan(guidePlateIn(guide.thickness));
-    expect(long).toBeLessThan(75);
+    // No bigger than it has to be, and one length at every angle: the plate ends just past the longer of the
+    // 15 degree key and a low-angle guide's, and on for the hole. Thick stock's 15 degree key is the longer.
+    expect(guidePlateIn(guide.thickness)).toBe(guidePlateIn(guide.thickness, { angleDeg: 3, bit: 6.35 }));
+    expect(guidePlateIn(guide.thickness)).toBe(guidePlateIn(guide.thickness, { angleDeg: 6, bit: 6.35 }));
+    expect(guidePlateIn(guide.thickness)).toBeLessThan(55);
+    expect(guidePlateIn(12.3)).toBe(guidePlateIn(guide.thickness));
+    expect(guidePlateIn(38.1)).toBeGreaterThan(guidePlateIn(guide.thickness));
+    expect(guidePlateIn(38.1, { angleDeg: 3, bit: 6.35 })).toBe(guidePlateIn(38.1));
+    expect(long).toBeLessThan(85);
     expect(mesh.volume).toBeGreaterThan(5000);
-    // Under 10 cm3: a thin plate and leg, and the boss on a web narrower than itself.
-    expect(mesh.volume).toBeLessThan(10000);
+    // Under 12 cm3: a thin plate and leg, and the boss on a web narrower than itself.
+    expect(mesh.volume).toBeLessThan(12000);
     expect(GUIDE.web).toBeLessThan(GUIDE.boss);
     expect(GUIDE.web).toBeGreaterThanOrEqual(0.69 * GUIDE.boss);
     // Its far corners are rounded: nothing of it is in the very corner of the box it fills.
@@ -794,9 +817,11 @@ describe('the printed guide', () => {
     expect(sleeveProblems({ ...POCKET_SLEEVE, outside: 4.8 })).toEqual(["The sleeve's wall is too thin: at least 5.1 mm outside."]);
     expect(sleeveProblems({ ...POCKET_SLEEVE, outside: 12, length: 10 })).toEqual(['The sleeve is too big across for the guide: 10 mm outside at most.']);
     expect(sleeveProblems({ ...POCKET_SLEEVE, length: 1 })).toEqual(['The sleeve is too short: at least 2 mm.']);
-    expect(sleeveProblems({ ...POCKET_SLEEVE, length: 25 })).toEqual(['A sleeve this long does not fit: the guide holds 20.2 mm.']);
-    expect(sleeveProblems({ bore: 4, outside: 8, length: 12, count: 2 })).toEqual(['Two sleeves this long do not fit: the guide holds 20 mm in all.']);
-    await expect(buildPocketGuide({ ...guide, sleeve: { ...POCKET_SLEEVE, length: 25 } })).rejects.toThrow(/does not fit/);
+    expect(sleeveProblems({ ...POCKET_SLEEVE, length: 40 })).toEqual(['A sleeve this long does not fit: the guide holds 30.2 mm.']);
+    // Two of a common length, 12 mm, fit, as fat as a sleeve may be.
+    expect(sleeveProblems({ bore: 4, outside: SLEEVE_LIMITS.outside, length: 12, count: 2 })).toEqual([]);
+    expect(sleeveProblems({ bore: 4, outside: 6, length: 16, count: 2 })).toEqual(['Two sleeves this long do not fit: the guide holds 30.3 mm in all.']);
+    await expect(buildPocketGuide({ ...guide, sleeve: { ...POCKET_SLEEVE, length: 40 } })).rejects.toThrow(/does not fit/);
     // A fatter sleeve stops a little further from the edge, which the bore meets at an angle; a low-angle guide holds more.
     expect(sleeveRoom(8)).toBeLessThan(sleeveRoom(6));
     expect(sleeveRoom(7, 3)).toBeGreaterThan(sleeveRoom(7));
@@ -809,6 +834,61 @@ describe('the printed guide', () => {
     expect(await volume({ ...POCKET_SLEEVE, outside: 6 })).toBeGreaterThan(await volume(POCKET_SLEEVE));
     expect(guideBoss({ sleeve: POCKET_SLEEVE }).boss).toBe(GUIDE.boss);
     expect(guideBoss({ sleeve: { ...POCKET_SLEEVE, outside: 10 } })).toEqual({ boss: 16, web: 11.2 });
+  });
+
+  it('has the stock and the angle it is made for engraved in the top of its plate', async () => {
+    expect(guideLabel(guide)).toBe('3/4" 15°');
+    expect(guideLabel({ thickness: 12.3, low: { angleDeg: 6, bit: 6.35 } })).toBe('1/2" 6°');
+    // Stock that is none of the usual ones is named by its thickness.
+    expect(guideLabel({ thickness: 22 })).toBe('22mm 15°');
+    for (const text of ['3/4" 15°', '1/2" 6°', '22.5mm 3°', '5/8" 15°', '1" 15°']) expect(strokeTextDraws(text)).toBe(true);
+    // Its lines stay on the plate: within its length and well inside its width, 0.6 mm deep.
+    const { guide: placed } = await buildPocketGuideInUse(guide);
+    const p = placed.positions;
+    const floor: { x: number; y: number }[] = [];
+    for (let i = 0; i < p.length; i += 3) if (Math.abs(p[i + 2]! - (GUIDE.plate - GUIDE.label.depth)) < 1e-4 && p[i]! > -GUIDE.leg) floor.push({ x: p[i]!, y: p[i + 1]! });
+    expect(floor.length).toBeGreaterThan(50);
+    expect(Math.min(...floor.map((v) => v.x))).toBeGreaterThan(-GUIDE.leg + 1);
+    // It stops short of the hole the guide hangs by, which goes through the plate at its far end.
+    const hole = guidePlateIn(guide.thickness) - GUIDE.hang.rim - GUIDE.hang.diameter / 2;
+    expect(Math.max(...floor.map((v) => v.x))).toBeLessThan(hole - GUIDE.hang.diameter / 2 - 1);
+    const top: { x: number; y: number }[] = [];
+    for (let i = 0; i < p.length; i += 3) if (Math.abs(p[i + 2]! - GUIDE.plate) < 1e-4 && Math.abs(Math.hypot(p[i]! - hole, p[i + 1]!) - GUIDE.hang.diameter / 2) < 0.01) top.push({ x: p[i]!, y: p[i + 1]! });
+    expect(top.length).toBeGreaterThan(20);
+    // Its file is named by what is engraved on it.
+    expect(guideFileName(guide)).toBe('pocket-hole-guide-3-4in-15deg.3mf');
+    expect(guideFileName({ thickness: 12.3, low: { angleDeg: 6, bit: 6.35 } })).toBe('pocket-hole-guide-1-2in-6deg.3mf');
+    expect(Math.max(...floor.map((v) => Math.abs(v.y)))).toBeLessThan(GUIDE.plateWidth / 2 - 2.5);
+    // Two rows, the stock over the angle, each character 7.5 mm tall: big enough for a 0.4 mm nozzle.
+    const ys = floor.map((v) => v.y);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(2 * 7.5);
+  });
+
+  it("the bit's hole ends where its tip stops, closed all round by a rib that is clear of the wood", async () => {
+    for (const low of [undefined, { angleDeg: 3 as const, bit: 6.35 }, { angleDeg: 6 as const, bit: 6.35 }]) {
+      const made = { ...guide, low };
+      const { guide: placed, board } = await buildPocketGuideInUse(made);
+      const angle = ((low?.angleDeg ?? POCKET.angleDeg) * Math.PI) / 180;
+      // A point of the bore's own frame (along it from the edge, across it, square to it), in the board's.
+      const at = (s: number, y: number, z: number): [number, number, number] => [s * Math.cos(angle) - z * Math.sin(angle), y, s * Math.sin(angle) + z * Math.cos(angle) - guide.thickness / 2];
+      const nose = guideKeyNose(guide.thickness, low);
+      // The tip stops as far out of the chuck as the notes say: the guide is its own gauge.
+      const stop = guideBitOut(made) - POCKET.guideOutside;
+      expect(stop).toBeCloseTo(nose - GUIDE.noseClear + POCKET.through, 9);
+      expect(inSolid(placed, ...at(stop - 0.3, 0.01, 0.01))).toBe(false);
+      expect(inSolid(placed, ...at(stop + 0.3, 0.01, 0.01))).toBe(true);
+      expect(inSolid(placed, ...at(stop + GUIDE.stop.wall - 0.3, 0.01, -1.5))).toBe(true);
+      // Below the bore's axis, where the key alone would leave the hole open, the rib closes it: plastic under the
+      // hole and at its end, and none of it in the board.
+      const rib = (guide.drill + GUIDE.bitClearance) / 2 + GUIDE.stop.round;
+      for (const s of [nose + GUIDE.stop.back + 0.1, stop, stop + GUIDE.stop.wall - 0.1]) {
+        for (const turn of [-60, -30, 0, 30, 60]) {
+          const [y, z] = [(rib - 0.1) * Math.sin((turn * Math.PI) / 180) + 0.01, -(rib - 0.1) * Math.cos((turn * Math.PI) / 180)];
+          expect(inSolid(placed, ...at(s, y, z))).toBe(true);
+          expect(inSolid(board, ...at(s, y, z))).toBe(false);
+        }
+      }
+    }
   });
 
   it('takes flanged sleeves: one in the back, a second let into the fence, each flange in a recess', async () => {
@@ -824,17 +904,72 @@ describe('the printed guide', () => {
     expect(second!.to).toBeLessThan(0);
     expect(second!.from).toBeGreaterThanOrEqual(first!.to - 1e-9);
     // The boss grows round the flange, and the recesses come out of the print.
-    expect(guideBoss({ sleeve: flanged }).boss).toBe(15);
+    expect(guideBoss({ sleeve: flanged }).boss).toBe(16);
     const plain = await buildPocketGuide({ ...guide, sleeve: { ...flanged, flange: undefined } });
     const made = await buildPocketGuide({ ...guide, sleeve: flanged });
     expect(made.volume).toBeGreaterThan(5000);
     expect(made.volume).not.toBeCloseTo(plain.volume, 0);
+    // The recess in the fence is open to the fence's face all the way round, so the sleeve goes in along the bore: the
+    // bore meets the fence at an angle, and on the side nearer the plate the recess is deepest. In the board's frame.
+    const { guide: placed } = await buildPocketGuideInUse({ ...guide, sleeve: flanged });
+    const solidAt = (x: number, y: number, z: number) => inSolid(placed, x, y, z);
+    const axis = -guide.thickness / 2;
+    // Just inside the fence's face, within the flange's circle on the plate's side of the bore: open.
+    expect(solidAt(-0.2, 0.37, axis + 5.3)).toBe(false);
+    // Outside the flange's circle there, the fence is whole.
+    expect(solidAt(-0.2, 0.37, axis + 7.5)).toBe(true);
+    // The sleeve's seat is a teardrop on the side that is up when it is printed, away from the plate: a point over
+    // the hole's middle, open just above the round hole's top there, and whole at the same place on the plate's
+    // side. A point of the bore's own frame (along it, across it, square to it), in the board's.
+    const [sin, cos] = [Math.sin((POCKET.angleDeg * Math.PI) / 180), Math.cos((POCKET.angleDeg * Math.PI) / 180)];
+    const inBore = (s: number, y: number, z: number) => solidAt(s * cos - z * sin, y, s * sin + z * cos + axis);
+    const along = -POCKET.guideOutside + 6;
+    const r = (flanged.outside + GUIDE.sleeveFit) / 2;
+    const tip = r / Math.cos((GUIDE.teardrop * Math.PI) / 180);
+    expect(tip - r).toBeLessThan(0.11 * r);
+    expect(tip - r).toBeGreaterThan(0.2);
+    expect(inBore(along, 0.01, -(tip - 0.08))).toBe(false);
+    expect(inBore(along, 0.01, -(tip + 0.08))).toBe(true);
+    expect(inBore(along, 0.01, tip - 0.08)).toBe(true);
+    // A small one: beside the point, and down the hole's sides, the hole is round and the plastic whole.
+    expect(inBore(along, 1, -(tip - 0.08))).toBe(true);
+    expect(inBore(along, 2, -3.65)).toBe(true);
+    expect(inBore(along, 3.95, -1.5)).toBe(true);
     // What does not fit: a flange no bigger than the sleeve, one too big, one as thick as the sleeve, two too long.
     expect(sleeveProblems({ ...flanged, flange: { diameter: 8, thickness: 2 } })).toEqual(['The flange must be bigger across than the sleeve, and its thickness more than 0.']);
     expect(sleeveProblems({ ...flanged, count: 1, flange: { diameter: 20, thickness: 2 } })).toEqual(['The flange is too big across for the guide: 16 mm at most.']);
     expect(sleeveProblems({ ...flanged, length: 2 })).toEqual(['The flange is as thick as the sleeve is long: the length is over all.']);
-    expect(sleeveProblems({ ...flanged, length: 12 })[0]).toMatch(/^Two sleeves this long do not fit/);
+    expect(sleeveProblems({ ...flanged, length: 12, flange: { diameter: SLEEVE_LIMITS.flange, thickness: 2 } })).toEqual([]);
+    expect(sleeveProblems({ ...flanged, length: 16 })[0]).toMatch(/^Two sleeves this long do not fit/);
     expect(sleeveGoesIn(flanged)).toBe('one from the back and one from the fence side, each until its flange is seated');
+  });
+
+  it('has a bore as long as its sleeves need: one long one or two in line, and no shorter than the least', async () => {
+    const flanged = (length: number): PocketSleeve => ({ bore: 4, outside: 8, length, count: 2, flange: { diameter: 12, thickness: 2 } });
+    // The usual sleeve and two short ones take the least; two of 12 mm or one of 25 or 30 mm a longer bore.
+    expect(boreOutside()).toBe(POCKET.guideOutside);
+    expect(boreOutside(flanged(10))).toBe(POCKET.guideOutside);
+    expect(boreOutside({ bore: 4, outside: 6, length: 5, count: 1 })).toBe(POCKET.guideOutside);
+    expect(boreOutside(flanged(12))).toBe(26);
+    expect(boreOutside({ bore: 4, outside: SLEEVE_LIMITS.outside, length: 12, count: 2 })).toBe(27);
+    expect(boreOutside({ ...POCKET_SLEEVE, length: 25 })).toBe(27);
+    expect(boreOutside({ ...POCKET_SLEEVE, length: 30 })).toBe(POCKET.guideOutsideMost);
+    expect(boreOutside({ ...POCKET_SLEEVE, length: 60 })).toBe(POCKET.guideOutsideMost);
+    for (const sleeve of [flanged(12), { ...POCKET_SLEEVE, length: 25 }, { ...POCKET_SLEEVE, length: 30 }, { bore: 4, outside: 10, length: 12, count: 2 as const }]) {
+      for (const low of [undefined, { angleDeg: 3 as const, bit: 6.35 }]) {
+        const made = { ...guide, sleeve, low };
+        expect(pocketGuideProblems(made)).toEqual([]);
+        // The sleeves lie between the boss's back and the board's edge, one clear of the other.
+        const placed = guideSleeves(made);
+        expect(Math.min(...placed.map((s) => s.from))).toBeGreaterThanOrEqual(-boreOutside(sleeve) - 1e-9);
+        expect(Math.max(...placed.map((s) => s.to))).toBeLessThan(0);
+        if (placed.length === 2) expect(Math.max(placed[0]!.from, placed[1]!.from)).toBeGreaterThanOrEqual(Math.min(placed[0]!.to, placed[1]!.to) - 1e-9);
+        // The bit stands further out of the chuck by what the bore is longer, and the print is longer by as much.
+        expect(guideBitOut(made) - guideBitOut({ ...guide, low })).toBeCloseTo(boreOutside(sleeve) - POCKET.guideOutside, 9);
+      }
+      const long = async (s?: PocketSleeve) => Math.max(...Array.from((await buildPocketGuide({ ...guide, sleeve: s })).positions).filter((_, i) => i % 3 === 0));
+      expect((await long(sleeve)) - (await long({ ...sleeve, length: 5 }))).toBeCloseTo((boreOutside(sleeve) - POCKET.guideOutside) * Math.cos((POCKET.angleDeg * Math.PI) / 180), 1);
+    }
   });
 
   it("a job's guides, lists and checklist go by the shop's sleeve", () => {

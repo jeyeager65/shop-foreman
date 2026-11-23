@@ -31,24 +31,43 @@
  * reaches just past the key and stands on the face a finger's width either side of the pocket. To use less
  * filament the plate and the leg are thin, and the boss stands on a web narrower than
  * itself; the plate's far corners and the leg's lower corners are rounded.
+ *
+ * What it is made for is engraved in the plate's top, which faces up in use: the stock and the angle (`guideLabel`),
+ * which its file is named by too. Past the key the plate has a hole to hang it up by.
  */
-import { KEY_RADIUS, LOW_POCKET, type LowAngle, POCKET, POCKET_SLEEVE, arcFloorAt, arcShape, bitOutOfChuck, fenceFlangeAt, guideStock, jigSleeve, pocketShape, sleeveProblems, sleeveRoom } from '@/geometry/pocketHole';
+import { KEY_RADIUS, LOW_POCKET, type LowAngle, POCKET, POCKET_SLEEVE, arcFloorAt, arcShape, bitOutOfChuck, boreOutside, fenceFlangeAt, guideStock, jigSleeve, pocketShape, sleeveLipAt, sleeveProblems } from '@/geometry/pocketHole';
 import { type SolidMesh, loadManifold, meshOf } from '@/geometry/solids';
 import type { JigInstance, Mm, PocketSleeve } from '@/model';
 import { MM_PER_INCH } from '@/units';
-import { type PrintObject, write3mf } from './threemf';
+import { STROKE, strokeText, strokeTextLength } from './strokeText';
+import { type PrintObject, type PrintSettings, write3mf } from './threemf';
 
 /** Sizes that don't come from the pocket. Tune me: first guesses, not yet printed. */
 export const GUIDE = {
   /** The plate that lies on the board's face: its thickness, its width across the trough, and how far it reaches in past the key's end. */
-  plate: 3,
+  plate: 4,
   plateWidth: 26,
   plateBeyondKey: 4,
+  /**
+   * The bit's hole ends in the key where the bit's tip stops, so the guide is its own gauge: the bit is pushed in
+   * until it stops there and the chuck tightened against the guide's back. Under the key the hole is closed all
+   * round by a round rib about the bore, down into the pocket: this much plastic round the hole (`round`), this
+   * much of it past the hole's end for the bit to stop against (`wall`), starting this far behind the key's nose
+   * (`back`), clear of the corner the pocket's bit leaves where the seat meets the floor.
+   */
+  stop: { round: 0.8, wall: 4, back: 1 },
+  /**
+   * How far a low-angle guide's key runs on from the seat, at the most: about as long as a 15 degree guide's. The
+   * pocket is much longer, but the key only has to sit between its walls against the seat.
+   */
+  lowKey: 20,
   /** The leg that hangs over the edge, down to the board's other face: how thick. */
   leg: 4,
   /** The boss round the bore outside the edge, across, at the least: it is this much plastic round a fatter sleeve (`guideBoss`). */
   boss: 13,
   bossWall: 3,
+  /** The plastic round a sleeve's flange: less than round the sleeve, which is pushed in tight; the flange only lies in its recess. */
+  flangeWall: 2,
   /**
    * The web from the boss up to the plate's top (the bed, when it is printed): it carries the boss and is what the boss
    * is printed on. Seven tenths of the boss across: narrower, and the boss's sides would overhang too far to print.
@@ -58,6 +77,13 @@ export const GUIDE = {
   round: 5,
   /** Added to the sleeve's outside diameter for a push fit in the print. Tune me. */
   sleeveFit: 0.1,
+  /**
+   * The bore lies nearly level when the guide is printed, so its top would be printed over air. Each hole along it
+   * is a teardrop there: where its sides would get flatter than this many degrees from level they run on straight,
+   * to a point over the hole's middle. The steeper, the taller the point; at 25 it is 10% of the hole's radius above
+   * the round hole's top, and the sleeve bears on the round below it. Tune me.
+   */
+  teardrop: 25,
   /** Past the sleeve the hole is this much bigger than the bit, so the bit touches no plastic. */
   bitClearance: 0.8,
   /** The ball nose the trough is cut with: it rounds the corners where the seat meets the trough's walls. */
@@ -68,11 +94,29 @@ export const GUIDE = {
   noseRoundOver: 0.3,
   /** Between two guides on the print bed. */
   bedSpacing: 10,
+  /**
+   * The label engraved in the plate's top, the stock over the angle: how deep, how wide its lines (two passes of a
+   * 0.4 mm nozzle), what is left clear at each end of it, how big it is at the most (times the 6 mm grid it is drawn
+   * on: 7.5 mm characters, whose smallest island, inside the degree mark, is still 1.7 mm across) and the gap between
+   * its two rows, as a share of a character's height.
+   */
+  label: { depth: 0.6, line: 0.8, margin: 1.5, scale: 1.25, between: 0.35 },
+  /** The hole to hang it up by, through the plate's far end: how big, the plastic round it, and how much longer the plate is for it. */
+  hang: { diameter: 5, rim: 3, extra: 6 },
 };
 
-/** How far the plate reaches in from the edge: to where the key ends (the bore's axis comes up through the face there), and a little past. */
+/** What is engraved on a guide: the stock it is made for and its bore's angle, as `3/4" 15°` (`18.5mm 6°` for stock that is none of the usual ones). */
+export const guideLabel = (guide: Pick<PocketGuide, 'thickness' | 'low'>): string =>
+  `${guideStock(guide.thickness)?.name ?? `${+guide.thickness.toFixed(1)}mm`} ${guide.low?.angleDeg ?? POCKET.angleDeg}°`;
+
+/**
+ * How far the plate reaches in from the edge: to where the key ends (the bore's axis comes up through the face
+ * there; a low-angle guide's key ends a set way past the seat), a little past, and on for the hole it hangs by.
+ * Whatever its angle a guide is as long as the longer of the two keys needs, so the guides for one stock are one
+ * length at every angle, their holes in one place.
+ */
 export const guidePlateIn = (thickness: Mm, low?: PocketGuide['low']): Mm =>
-  low ? Math.ceil(arcShape(thickness, low.bit, low.angleDeg, low.seat).end) + GUIDE.plateBeyondKey : Math.ceil(thickness / 2 / Math.tan((POCKET.angleDeg * Math.PI) / 180)) + GUIDE.plateBeyondKey;
+  Math.ceil(Math.max((low?.seat ?? LOW_POCKET.seat) + GUIDE.lowKey, thickness / 2 / Math.tan((POCKET.angleDeg * Math.PI) / 180))) + GUIDE.plateBeyondKey + GUIDE.hang.extra;
 
 /** The angle a guide's bore climbs into the board at. */
 export const guideAngle = (guide: Pick<PocketGuide, 'low'>): number => guide.low?.angleDeg ?? POCKET.angleDeg;
@@ -81,15 +125,15 @@ export const guideAngle = (guide: Pick<PocketGuide, 'low'>): number => guide.low
 const KEY_OVER_FLOOR: Mm = 0.5;
 
 /**
- * How far in from the edge a low-angle guide's key runs: to where the pocket's arced floor comes up to the
- * screw's axis, which is the key's underside, less a little.
+ * How far in from the edge a low-angle guide's key runs: a set way past the seat, and no further than where the
+ * pocket's arced floor comes up to the screw's axis, which is the key's underside, less a little.
  */
 export function lowKeyEnd(thickness: Mm, low: NonNullable<PocketGuide['low']>): Mm {
   const arc = arcShape(thickness, low.bit, low.angleDeg, low.seat);
   const axis = (u: Mm) => -thickness / 2 + (u * arc.sin) / arc.cos;
   let u = arc.arcFrom;
   while (u < arc.end && arcFloorAt(arc, u + 0.5) < axis(u + 0.5) - KEY_OVER_FLOOR) u += 0.5;
-  return u;
+  return Math.min(u, arc.seat + GUIDE.lowKey);
 }
 
 /**
@@ -115,16 +159,19 @@ export interface PocketGuide {
 }
 
 /** How far the pilot bit must stand out of the chuck with this guide. */
-export const guideBitOut = (guide: Pick<PocketGuide, 'thickness' | 'low'>): Mm =>
-  guide.low ? POCKET.guideOutside + arcShape(guide.thickness, guide.low.bit, guide.low.angleDeg, guide.low.seat).seat + POCKET.through : bitOutOfChuck(pocketShape(guide.thickness, GUIDE.ball));
+export const guideBitOut = (guide: Pick<PocketGuide, 'thickness' | 'low' | 'sleeve'>): Mm =>
+  guide.low ? guideOutside(guide) + arcShape(guide.thickness, guide.low.bit, guide.low.angleDeg, guide.low.seat).seat + POCKET.through : bitOutOfChuck(pocketShape(guide.thickness, GUIDE.ball), guide.sleeve);
 
 /** The sleeve a guide is printed for. */
 export const guideSleeve = (guide: Pick<PocketGuide, 'sleeve'>): PocketSleeve => guide.sleeve ?? POCKET_SLEEVE;
 
+/** A guide's bore outside the board's edge, to the back the chuck stops against: as long as its sleeves need. */
+export const guideOutside = (guide: Pick<PocketGuide, 'sleeve'>): Mm => boreOutside(guideSleeve(guide));
+
 /** The boss round the bore, across, and the web it stands on: bigger round a fat sleeve. */
 export function guideBoss(guide: Pick<PocketGuide, 'sleeve'>): { boss: Mm; web: Mm } {
   const sleeve = guideSleeve(guide);
-  const boss = Math.max(GUIDE.boss, sleeve.outside + 2 * GUIDE.bossWall, (sleeve.flange?.diameter ?? 0) + GUIDE.bossWall);
+  const boss = Math.max(GUIDE.boss, sleeve.outside + 2 * GUIDE.bossWall, (sleeve.flange?.diameter ?? 0) + 2 * GUIDE.flangeWall);
   return { boss, web: Math.round(boss * 0.7 * 10) / 10 };
 }
 
@@ -135,15 +182,15 @@ export function guideBoss(guide: Pick<PocketGuide, 'sleeve'>): { boss: Mm; web: 
  */
 export function guideSleeves(guide: Pick<PocketGuide, 'sleeve' | 'low'>): { from: Mm; to: Mm; flange?: 'from' | 'to' }[] {
   const sleeve = guideSleeve(guide);
-  const back = -POCKET.guideOutside;
+  const back = -guideOutside(guide);
   if (sleeve.flange) {
     const fence = fenceFlangeAt(sleeve.flange.diameter, guideAngle(guide));
     const first = { from: back, to: back + sleeve.length, flange: 'from' as const };
     return sleeve.count === 2 ? [first, { from: fence - sleeve.length, to: fence, flange: 'to' as const }] : [first];
   }
-  const lip = sleeveRoom(sleeve.outside, guideAngle(guide)) - POCKET.guideOutside;
+  const lip = sleeveLipAt(sleeve.outside, guideAngle(guide));
   const first = { from: lip - sleeve.length, to: lip };
-  return sleeve.count === 2 ? [first, { from: -POCKET.guideOutside, to: -POCKET.guideOutside + sleeve.length }] : [first];
+  return sleeve.count === 2 ? [first, { from: back, to: back + sleeve.length }] : [first];
 }
 
 export function pocketGuideProblems(guide: PocketGuide): string[] {
@@ -177,7 +224,7 @@ async function guideInBoard(guide: PocketGuide, wasmUrl?: string) {
   const [sin, cos] = [Math.sin((angleDeg * Math.PI) / 180), Math.cos((angleDeg * Math.PI) / 180)];
   const BIG = 400;
   const over = 1;
-  const back = -POCKET.guideOutside;
+  const back = -guideOutside(guide);
   const half = GUIDE.plateWidth / 2;
   const plateIn = guidePlateIn(t, low);
 
@@ -185,6 +232,19 @@ async function guideInBoard(guide: PocketGuide, wasmUrl?: string) {
   const box = (x0: Mm, x1: Mm, y: Mm, z0: Mm, z1: Mm) => keep(keep(Manifold.cube([x1 - x0, 2 * y, z1 - z0])).translate(x0, -y, z0));
   /** A cylinder round the bore from `s0` to `s1` along it, in the bore's own frame (X along the bore from the edge, Z square to it). */
   const round = (s0: Mm, s1: Mm, radius: Mm) => keep(keep(keep(Manifold.cylinder(s1 - s0, radius, radius, 96)).rotate([0, 90, 0])).translate(s0, 0, 0));
+  /**
+   * A hole along the bore, to cut: round, with a teardrop on the side that is up when the guide is printed (the
+   * bore's -Z, away from the plate): the two planes that touch the circle where it is as flat as a print may be,
+   * either side of its top, and what is under both of them between those two places.
+   */
+  const hole = (s0: Mm, s1: Mm, radius: Mm) => {
+    const far = 4 * radius;
+    /** Everything on the hole's side of the plane touching it this many degrees round from its top. */
+    const under = (degrees: number) => keep(keep(keep(Manifold.cube([s1 - s0, 2 * far, radius + far])).translate(s0, -far, -radius)).rotate([degrees, 0, 0]));
+    const touch = radius * Math.sin((GUIDE.teardrop * Math.PI) / 180);
+    const point = keep(keep(under(GUIDE.teardrop).intersect(under(-GUIDE.teardrop))).intersect(box(s0, s1, touch, -far, 0)));
+    return keep(Manifold.union([round(s0, s1, radius), point]));
+  };
   /** A solid made in the bore's frame, set into the board's. */
   const toBoard = (s: Solid) => keep(keep(s.rotate([0, -angleDeg, 0])).translate(0, 0, -t / 2));
 
@@ -204,7 +264,11 @@ async function guideInBoard(guide: PocketGuide, wasmUrl?: string) {
   const corner = Math.min(KEY_RADIUS, (low ? low.bit : GUIDE.ball) / 2 + GUIDE.noseRoundOver);
   const post = (y: Mm) => keep(keep(Manifold.cylinder(BIG, corner, corner, 48)).translate(nose + corner, y, 0));
   const rounded = keep(Manifold.union([box(nose, BIG / 2, KEY_RADIUS - corner, 0, BIG), box(nose + corner, BIG / 2, KEY_RADIUS, 0, BIG), post(KEY_RADIUS - corner), post(-(KEY_RADIUS - corner))]));
-  const key = keep(toBoard(rounded).intersect(box(0, low ? lowKeyEnd(t, low) : plateIn, BIG, -BIG, over)));
+  // The bit's hole ends where its tip stops, in a rib under the key that closes the hole all round there.
+  const stop = seat + POCKET.through;
+  const bitHole = (guide.drill + GUIDE.bitClearance) / 2;
+  const rib = round(nose + GUIDE.stop.back, stop + GUIDE.stop.wall, bitHole + GUIDE.stop.round);
+  const key = keep(toBoard(keep(Manifold.union([rounded, rib]))).intersect(box(0, low ? lowKeyEnd(t, low) : plateIn - GUIDE.hang.extra, BIG, -BIG, over)));
   // The boss round the bore outside the edge, on a web up to the plate's top (the bed, when it is printed), its back square to the bore.
   const outside = box(-BIG, 0, BIG, -BIG, GUIDE.plate);
   const { boss, web: webWidth } = guideBoss(guide);
@@ -215,24 +279,57 @@ async function guideInBoard(guide: PocketGuide, wasmUrl?: string) {
   const cutAway = keep(keep(box(-BIG, 0, BIG, -BIG, BIG).rotate([0, 45, 0])).translate(nearBed.x, 0, nearBed.z));
   const web = keep(keep(toBoard(box(back, 5, webWidth / 2, 0, BIG)).intersect(outside)).subtract(cutAway));
   const body = keep(Manifold.union([plate, leg, key, barrel, web]));
+  const { outside: across, flange } = guideSleeve(guide);
+  const [sleeveBore, flangeBore] = [(across + GUIDE.sleeveFit) / 2, ((flange?.diameter ?? 0) + GUIDE.sleeveFit) / 2];
   const cutters = toBoard(
     keep(
       Manifold.union([
-        // Through the boss and the leg, and on through the front of the key where the bit comes out of the seat.
-        round(back - over, seat + 12, (guide.drill + GUIDE.bitClearance) / 2),
+        // Through the boss and the leg, and on into the front of the key where the bit comes out of the seat, as
+        // far as its tip goes and no further.
+        hole(back - over, stop, bitHole),
         // The sleeve's seat: from the boss's back to the lip just short of the edge, which the sleeve is pushed in against.
-        // A flanged one: each sleeve's own seat, and a recess for its flange, open to the back or to the edge.
-        ...(guideSleeve(guide).flange
-          ? guideSleeves(guide).flatMap((s) => {
-              const { outside: across, flange } = guideSleeve(guide);
-              const [body, lipped] = [(across + GUIDE.sleeveFit) / 2, (flange!.diameter + GUIDE.sleeveFit) / 2];
-              return s.flange === 'from' ? [round(s.from - over, s.to, body), round(s.from - over, s.from + flange!.thickness, lipped)] : [round(s.from, s.to + over, body), round(s.to - flange!.thickness, over, lipped)];
-            })
-          : [round(back - over, guideSleeves(guide)[0]!.to, (guideSleeve(guide).outside + GUIDE.sleeveFit) / 2)]),
+        // A flanged one in the boss's back: its own seat, and a recess for its flange, open to the back.
+        ...(flange
+          ? guideSleeves(guide).flatMap((s) => (s.flange === 'from' ? [hole(s.from - over, s.to, sleeveBore), hole(s.from - over, s.from + flange.thickness, flangeBore)] : []))
+          : [hole(back - over, guideSleeves(guide)[0]!.to, sleeveBore)]),
       ]),
     ),
   );
-  const solid = keep(body.subtract(cutters));
+  // A flanged sleeve let into the fence goes in along the bore from the edge's side. The bore meets the fence at an
+  // angle, so its seat and its flange's recess are cut on along the bore until they are open to the fence's face all
+  // the way round (cut square to the bore just past the edge, the fence closed over the side of them nearer the
+  // plate), and no further in than that face: the key and the plate past it are left whole.
+  const fenceSide = flange ? guideSleeves(guide).filter((s) => s.flange === 'to') : [];
+  const open = (radius: Mm) => (radius * sin) / cos + over;
+  const fenceCutters = fenceSide.length
+    ? [keep(toBoard(keep(Manifold.union(fenceSide.flatMap((s) => [hole(s.from, open(sleeveBore), sleeveBore), hole(s.to - flange!.thickness, open(flangeBore), flangeBore)])))).intersect(box(-BIG, 0, BIG, -BIG, BIG)))]
+    : [];
+  // The label, engraved in the plate's top along the plate, read from above with the fence on the left: the stock
+  // on one row and the angle under it, so its characters are big enough to print; smaller on a plate too short.
+  const rows = guideLabel(guide).split(' ');
+  // The hole to hang it by, through the plate past the key's end; the label stops short of it.
+  const hang = { x: plateIn - GUIDE.hang.rim - GUIDE.hang.diameter / 2, r: GUIDE.hang.diameter / 2 };
+  const hangHole = keep(keep(Manifold.cylinder(GUIDE.plate + 2 * over, hang.r, hang.r, 48)).translate(hang.x, 0, -over));
+  const room = hang.x - hang.r + GUIDE.leg - 2 * GUIDE.label.margin;
+  const scale = Math.min(GUIDE.label.scale, room / Math.max(...rows.map(strokeTextLength)));
+  const rowHeight = STROKE.height * scale * (1 + GUIDE.label.between);
+  /** A row's lines, where they are on the plate: each row centred along it, the rows centred across it. */
+  const labelLines = rows.flatMap((text, i) => {
+    const x = -GUIDE.leg + GUIDE.label.margin + (room - strokeTextLength(text) * scale) / 2;
+    const y = (rows.length / 2 - 1 - i) * rowHeight + (rowHeight - STROKE.height * scale) / 2;
+    return strokeText(text, scale).map(([a, b]) => [{ x: x + a.x, y: y + a.y }, { x: x + b.x, y: y + b.y }] as const);
+  });
+  const at = { x: 0, y: 0 };
+  const w = GUIDE.label.line;
+  // (A single-line font: each line a groove of one width, round at both its ends, as a round tool would leave it.)
+  const labelZ = GUIDE.plate - GUIDE.label.depth;
+  const strokes = labelLines.flatMap(([a, b]) => {
+    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    const bar = keep(keep(Manifold.cube([length, w, GUIDE.label.depth + over])).translate(0, -w / 2, 0));
+    const end = (p: { x: Mm; y: Mm }) => keep(keep(Manifold.cylinder(GUIDE.label.depth + over, w / 2, w / 2, 16)).translate(at.x + p.x, at.y + p.y, labelZ));
+    return [keep(keep(bar.rotate([0, 0, (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI])).translate(at.x + a.x, at.y + a.y, labelZ)), end(a), end(b)];
+  });
+  const solid = keep(body.subtract(keep(Manifold.union([cutters, ...fenceCutters, hangHole, ...strokes]))));
   return { Manifold, solid, shape, box, round, toBoard, keep, BIG, dispose: () => made.forEach((s) => s.delete()) };
 }
 
@@ -312,8 +409,8 @@ export function guideInUseAt(guide: PocketGuide, time: number): { guide: { out: 
     return k * k * (3 - 2 * k);
   };
   const [OUT, UP] = [3, 45];
-  const away = -POCKET.guideOutside - 14;
-  const deep = guideBitOut(guide) - POCKET.guideOutside;
+  const away = -guideOutside(guide) - 14;
+  const deep = guideBitOut(guide) - guideOutside(guide);
   const lifted = ease(IN_USE.withdraw, IN_USE.lift);
   const up = UP * (1 - ease(0, IN_USE.lower)) + UP * lifted;
   const out = OUT * (1 - ease(IN_USE.lower, IN_USE.slide)) + OUT * lifted;
@@ -327,19 +424,32 @@ const guideOf = (jig: JigInstance): PocketGuide => {
   return { thickness: jig.params.thickness!, drill: jig.params.drill!, sleeve: jigSleeve(jig), ...(angle ? { low: { angleDeg: angle, bit: jig.params.bit ?? MM_PER_INCH / 4, ...(jig.params.seat ? { seat: jig.params.seat } : {}) } } : {}) };
 };
 
+/**
+ * How a guide is sliced. Tune me: not yet printed. Four walls of a 0.4 mm nozzle make the leg and the plastic
+ * round the sleeve all but solid; the plate lies on the bed, so its strength is its top and bottom layers.
+ */
+export const GUIDE_PRINT: PrintSettings = { walls: 4, topLayers: 5, bottomLayers: 5, infillPercent: 40, infillPattern: 'gyroid', layerHeight: 0.2 };
+
 /** A job's guides, one for each thickness of stock its pocket holes are in, side by side on the bed. */
 export async function buildPocketGuideObjects(jigs: JigInstance[], wasmUrl?: string): Promise<PrintObject[]> {
   const objects: PrintObject[] = [];
   let y = 0;
   for (const jig of jigs) {
     const guide = guideOf(jig);
-    objects.push({ name: `Pocket-hole guide, ${guideStockName(guide.thickness)}${guide.low ? `, ${guide.low.angleDeg}°` : ''}`, mesh: await buildPocketGuide(guide, wasmUrl), placements: [{ x: 0, y }] });
+    objects.push({ name: `Pocket-hole guide, ${guideStockName(guide.thickness)}${guide.low ? `, ${guide.low.angleDeg}°` : ''}`, mesh: await buildPocketGuide(guide, wasmUrl), placements: [{ x: 0, y }], print: GUIDE_PRINT });
     y += GUIDE.plateWidth + GUIDE.bedSpacing;
   }
   return objects;
 }
 
 export const POCKET_GUIDE_FILE = 'pocket-hole-guide.3mf';
+
+/** A guide's file, named by what is engraved on it: `pocket-hole-guide-3-4in-15deg.3mf`. */
+export const guideFileName = (guide: Pick<PocketGuide, 'thickness' | 'low'>): string =>
+  `pocket-hole-guide-${guideLabel(guide).replace('/', '-').replace('"', 'in').replace('°', 'deg').replace(' ', '-')}.3mf`;
+
+/** The file a job's guides go in: named by the guide where there is one, plainly where there are several. */
+export const pocketGuidesFileName = (jigs: JigInstance[]): string => (jigs.length === 1 ? guideFileName(guideOf(jigs[0]!)) : POCKET_GUIDE_FILE);
 
 /** A job's guides as one 3MF file. */
 export async function buildPocketGuide3mf(jigs: JigInstance[], wasmUrl?: string): Promise<Uint8Array> {

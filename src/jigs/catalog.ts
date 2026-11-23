@@ -20,12 +20,12 @@ import { buildInstallKitObjects } from './installKit';
 import { type PocketCover, buildPocketCover, coverSize, pocketCoverProblems } from './pocketCover';
 import { POCKET_SCREW, type PocketSection, bothUnits, farthestSeat, pocketSection } from './pocketSection';
 import { type ScrapView, buildDrilledScrap, testLedge } from './drilledScrap';
-import { type PocketGuide, buildPocketGuide, guideBitOut, guideStockName, pocketGuideProblems } from './pocketGuide';
+import { GUIDE, GUIDE_PRINT, type PocketGuide, buildPocketGuide, guideAngle, guideBitOut, guideBoss, guideFileName, guideLabel, guideStockName, pocketGuideProblems } from './pocketGuide';
 import { buildPrintedHandle } from './printedHandles';
 import { buildSlideJigObjects, slideJigProblems } from './slideJig';
 import { buildSlideShimObjects } from './slideShims';
 import { TAB_TEST_FITS, type TabTestKind, tabTestNotes, tabTestParts, tabTestProblems } from './tabTest';
-import type { PrintObject } from './threemf';
+import { type PrintObject, printSettingsWords } from './threemf';
 import { type TrayBins, type TrayDivider, buildTrayBinObjects, buildTrayDivider, trayBinProblems, trayBinSize, trayDividerProblems } from './trayBins';
 import { woodHandleBits, woodHandleFiles } from './woodHandle';
 
@@ -78,7 +78,7 @@ export interface JigItem {
   about: string;
   /** Not yet printed, cut or used: every size is a first guess. */
   untested?: boolean;
-  /** Always one: its file is one of it whatever, so the page asks no "How many" (the scrap test). */
+  /** Always one: its file is one of it whatever, so the page asks no "How many" (the scrap test; the drill guide, one for a stock and an angle). */
   single?: boolean;
   fields: JigField[];
   /** What the fields start at: the shop profile's entry where there is one, else the job's usual values. */
@@ -93,6 +93,8 @@ export interface JigItem {
   bits?(values: JigValues, machineId: Id): { chosen?: Id; offered: { id: Id; name: string }[] };
   /** The 3MF's file name. */
   fileName: string;
+  /** Its file name where that goes by its sizes (a guide made for one stock and one angle). */
+  fileNameFor?(values: JigValues): string;
   /** A thing with no solid of its own (a test cut in scrap): the page's picture is its G-code, carved. */
   carved?: boolean;
   /** A test cut's second picture: the scrap once what is drilled by hand is drilled, cut away to show it. */
@@ -188,6 +190,9 @@ async function woodHandleObject(handle: Handle, thickness: Mm, wasmUrl?: string)
  * The items a shop can make, in the order the page lists them: its made handles (each from its entry
  * in the shop profile), then the jigs, then the install kit's pieces.
  */
+/** The drill guide's choice of angle that prints a guide for every angle. */
+const EVERY_ANGLE = 'all';
+
 export function jigItems(shop: ShopProfile): JigItem[] {
   const handles = shop.hardware.filter((h): h is Handle => h.kind === 'handle' && !!(h.printed ?? h.cnc));
   const stock = shop.materialCatalog.filter((m) => m.groupId === 'solid-wood' || m.groupId === 'plywood').map((m) => ({ title: materialTitle(m), value: m.id }));
@@ -395,7 +400,7 @@ export function jigItems(shop: ShopProfile): JigItem[] {
     { key: 'drill', label: 'Drill bit', kind: 'mm', hint: 'The pilot bit that turns in its sleeve: 4 mm or 5/32".' },
     { key: 'sleeveBore', label: "Sleeve's bore", kind: 'mm', hint: "The metal sleeve that steers the bit: a stainless spacer or a bronze bushing. It starts at the Shop profile's (Hardware, Drill guide sleeve)." },
     { key: 'sleeveOutside', label: "Sleeve's outside diameter", kind: 'mm', hint: `${SLEEVE_LIMITS.outside} mm at most.` },
-    { key: 'sleeveLength', label: "Sleeve's length", kind: 'mm', hint: 'Longer steers better: about 20 mm fits.' },
+    { key: 'sleeveLength', label: "Sleeve's length", kind: 'mm', hint: "Longer steers better. The guide's bore is as long as the sleeves need: up to about 30 mm in all, one long one or two in line." },
     { key: 'sleeveCount', label: 'Sleeves', kind: 'choice', choices: [{ title: 'One', value: '1' }, { title: 'Two, in line', value: '2' }], hint: 'Two short ones: one at each end of the bore.' },
     { key: 'sleeveFlanged', label: 'Flange', kind: 'choice', choices: [{ title: 'Plain: no flange', value: 'no' }, { title: 'Flanged', value: 'yes' }], hint: 'A flanged sleeve seats in a recess, flush. Its length is over all.' },
     { key: 'sleeveFlange', label: "Flange's diameter", kind: 'mm', when: (values) => values.sleeveFlanged === 'yes' },
@@ -404,16 +409,23 @@ export function jigItems(shop: ShopProfile): JigItem[] {
       key: 'angle',
       label: 'Pocket',
       kind: 'choice',
-      choices: [{ title: `${POCKET.angleDeg}°: as a job cuts them`, value: String(POCKET.angleDeg) }, ...LOW_POCKET.angles.map((a) => ({ title: `Low angle, ${a}°`, value: String(a) }))],
-      hint: 'The angle the screw lies at. A low-angle pocket is cut as a pocket-hole machine cuts it.',
+      choices: [
+        { title: `${POCKET.angleDeg}°: as a job cuts them`, value: String(POCKET.angleDeg) },
+        ...LOW_POCKET.angles.map((a) => ({ title: `Low angle, ${a}°`, value: String(a) })),
+        { title: `One of each: ${[POCKET.angleDeg, ...LOW_POCKET.angles].map((a) => `${a}°`).join(', ')}`, value: EVERY_ANGLE },
+      ],
+      hint: 'The angle the screw lies at. A low-angle pocket is cut as a pocket-hole machine cuts it. One of each prints a guide for every angle, side by side.',
     },
     { ...seatField, when: (values) => String(values.angle) !== String(POCKET.angleDeg) },
   ];
-  const guideOf = (values: JigValues): PocketGuide => {
-    const low = LOW_POCKET.angles.find((a) => String(a) === String(values.angle));
+  /** The guide for these sizes at one angle (left out: the angle chosen; with one of each chosen, the 15° one). */
+  const guideOf = (values: JigValues, angle: unknown = values.angle): PocketGuide => {
+    const low = LOW_POCKET.angles.find((a) => String(a) === String(angle));
     const sleeve: PocketSleeve = { bore: num(values, 'sleeveBore'), outside: num(values, 'sleeveOutside'), length: num(values, 'sleeveLength'), count: String(values.sleeveCount) === '2' ? 2 : 1, ...(values.sleeveFlanged === 'yes' ? { flange: { diameter: num(values, 'sleeveFlange'), thickness: num(values, 'sleeveFlangeThickness') } } : {}) };
     return { thickness: GUIDE_STOCK.find((s) => s.id === values.stock)?.mm ?? num(values, 'thickness'), drill: num(values, 'drill'), sleeve, ...(low ? { low: { angleDeg: low, bit: lowBitWidth, ...(seatOf(values) !== LOW_POCKET.seat ? { seat: seatOf(values) } : {}) } } : {}) };
   };
+  /** Every guide these sizes print: one, or one for each angle. */
+  const guidesOf = (values: JigValues): PocketGuide[] => (values.angle === EVERY_ANGLE ? [POCKET.angleDeg, ...LOW_POCKET.angles].map((a) => guideOf(values, a)) : [guideOf(values)]);
   const shopSleeve = shop.pocketSleeve ?? POCKET_SLEEVE;
   const testStock = shop.materialCatalog.find((m) => m.groupId === 'plywood' && m.measuredThickness.mm > 15) ?? shop.materialCatalog[0];
   const testSize = (machineId?: Id) => pocketTestStock(shop.machines.find((m) => m.id === machineId) ?? activeMachine(shopFor({ materials: shop.materialCatalog }, shop)));
@@ -429,20 +441,34 @@ export function jigItems(shop: ShopProfile): JigItem[] {
       made: 'print',
       about: "The drill guide for pocket holes whose pocket the CNC cuts. The pilot is drilled from the board's edge, up into the pocket: a plate lies on the board's face with a key in the pocket, a leg hangs over the edge as a fence, and a boss on the leg carries the bit at 15° in a metal sleeve (or at 3° or 6° for a low-angle pocket).",
       untested: true,
+      single: true,
       fields: guideFields,
       defaults: { stock: GUIDE_STOCK[0].id, thickness: testStock?.measuredThickness.mm ?? 19.05, drill: POCKET.drill, angle: String(POCKET.angleDeg), seat: LOW_POCKET.seat, sleeveBore: shopSleeve.bore, sleeveOutside: shopSleeve.outside, sleeveLength: shopSleeve.length, sleeveCount: String(shopSleeve.count), sleeveFlanged: shopSleeve.flange ? 'yes' : 'no', sleeveFlange: shopSleeve.flange?.diameter ?? 12, sleeveFlangeThickness: shopSleeve.flange?.thickness ?? 2 },
-      problems: (values) => pocketGuideProblems(guideOf(values)),
-      build: async (values, wasmUrl) => [{ name: 'Pocket-hole guide', mesh: await buildPocketGuide(guideOf(values), wasmUrl), placements: [{ x: 0, y: 0 }] }],
+      problems: (values) => [...new Set(guidesOf(values).flatMap(pocketGuideProblems))],
+      // Side by side on the bed, each as wide as its boss or its plate.
+      build: async (values, wasmUrl) => {
+        const objects: PrintObject[] = [];
+        let y = 0;
+        for (const guide of guidesOf(values)) {
+          objects.push({ name: `Pocket-hole guide, ${guideLabel(guide)}`, mesh: await buildPocketGuide(guide, wasmUrl), placements: [{ x: 0, y }], print: GUIDE_PRINT });
+          y += Math.max(GUIDE.plateWidth, guideBoss(guide).boss) + GUIDE.bedSpacing;
+        }
+        return objects;
+      },
       notes: (values) => [
-        `Chuck the bit so it stands ${guideBitOut(guideOf(values)).toFixed(1)} mm out of the chuck: the chuck stops against the guide's back and the bit comes ${POCKET.through} mm through the seat into the pocket. A regular 4 mm or 5/32" bit is long enough.`,
+        guidesOf(values).length > 1
+          ? `Chuck the bit so it stands this far out of the chuck: ${guidesOf(values).map((g) => `${guideAngle(g)}°, ${guideBitOut(g).toFixed(1)} mm`).join('; ')}. The chuck stops against the guide's back and the bit comes ${POCKET.through} mm through the seat into the pocket. A regular 4 mm or 5/32" bit is long enough. Each guide has its stock and its angle engraved on it.`
+          : `Chuck the bit so it stands ${guideBitOut(guideOf(values)).toFixed(1)} mm out of the chuck: the chuck stops against the guide's back and the bit comes ${POCKET.through} mm through the seat into the pocket. A regular 4 mm or 5/32" bit is long enough.`,
+        "To set the bit without measuring, push it through the guide, off the board, until it stops at the end of its hole under the plate, and tighten the chuck against the guide's back. Use a regular-length bit, never a long one: the chuck against the guide's back is all that stops it, and a bit chucked too long drills on into the guide, at 15° up toward the plate your hand is on.",
         "Lay the plate on the board's face with its key in the pocket and pull the leg tight against the edge: the edge sets how far in the pilot starts, so it must be the edge the file was zeroed to. The part has to overhang the bench for the drill.",
         "The bit breaks out at the seat, inside the pocket: look for tear-out there, where the screw's head bears. The clean entry is on the joint's face.",
         `It is made for ${guideStockName(guideOf(values).thickness)}: the bit goes in at half the stock's thickness, and a little either way does not matter, so plywood and solid wood sold as one thickness share a guide. Another thickness takes another guide.`,
         `It takes ${guideOf(values).sleeve!.count === 2 ? 'two metal sleeves' : 'a metal sleeve'}, ${sleeveWords(guideOf(values).sleeve!)} (bore × outside × length): a stainless spacer or a bronze bushing. Push ${guideOf(values).sleeve!.count === 2 ? 'them' : 'it'} in: ${sleeveGoesIn(guideOf(values).sleeve!)}. Put the bit in before starting the drill.`,
-        'It prints plate down, the leg and the key standing up, without supports.',
+        `It prints plate down, the leg and the key standing up, without supports: ${printSettingsWords(GUIDE_PRINT)} (a first guess). Bambu Studio and OrcaSlicer take these from the file when it is opened, not when it is imported into a plate; set them by hand in another slicer.`,
       ],
       inUse: guideOf,
       fileName: 'pocket-hole-guide.3mf',
+      fileNameFor: (values) => (guidesOf(values).length > 1 ? guideFileName(guideOf(values)).replace(/-\d+deg\.3mf$/, `-${guidesOf(values).map(guideAngle).join('-')}deg.3mf`) : guideFileName(guideOf(values))),
     },
     {
       id: 'pocket-test',

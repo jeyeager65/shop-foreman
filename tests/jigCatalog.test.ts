@@ -166,8 +166,15 @@ describe('the catalog of things that are not cabinet parts', () => {
     expect(guide.inUse!({ ...guide.defaults, stock: '1/2' }).thickness).toBe(12.3);
     expect(guide.inUse!({ ...guide.defaults, stock: 'other', thickness: 22 }).thickness).toBe(22);
     expect(guide.notes!(guide.defaults).join(' ')).toMatch(/made for 3\/4" stock/);
-    expect(guide.notes!(guide.defaults)[0]).toMatch(/^Chuck the bit so it stands 39\.0 mm out of the chuck.*A regular 4 mm or 5\/32" bit is long enough/);
+    expect(guide.notes!(guide.defaults)[0]).toMatch(/^Chuck the bit so it stands 39.0 mm out of the chuck.*A regular 4 mm or 5\/32" bit is long enough/);
     expect(guide.problems({ ...guide.defaults, stock: 'other', thickness: 9 })).toEqual(['That stock is too thin for a pocket hole.']);
+    // One of each: a guide for every angle with the same sizes, side by side in one file named for them all.
+    expect(guide.single).toBe(true);
+    const each = { ...guide.defaults, angle: 'all' };
+    expect(guide.problems(each)).toEqual([]);
+    expect(guide.fileNameFor!(guide.defaults)).toBe('pocket-hole-guide-3-4in-15deg.3mf');
+    expect(guide.fileNameFor!(each)).toBe('pocket-hole-guide-3-4in-15-3-6deg.3mf');
+    expect(guide.notes!(each)[0]).toMatch(/^Chuck the bit so it stands this far out of the chuck: 15°, [\d.]+ mm; 3°, [\d.]+ mm; 6°, [\d.]+ mm\./);
     expect(test.problems({ ...test.defaults, materialId: 'nope' })).toEqual(["Choose the scrap's material."]);
     expect(test.problems({ ...test.defaults, pockets: '[]' })).toEqual(['Add a pocket to try.']);
   });

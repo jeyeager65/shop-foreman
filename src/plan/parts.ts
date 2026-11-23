@@ -11,7 +11,7 @@
  */
 import type { PocketCoverWhere, CutMethod, Feature, Id, JigInstance, Operation, Part, PartPlan, PlanChoices, PocketDrilling, PocketHoleMethod, PocketSleeve, ResolvedPlan, Shop, PocketLook, Tool } from '@/model';
 import { baseId } from '@/design/tags';
-import { LOW_POCKET, type LowAngle, POCKET, arcShape, bitOutOfChuck, guideThickness, pocketShape, sleeveParams } from '@/geometry/pocketHole';
+import { LOW_POCKET, type LowAngle, POCKET, arcShape, bitOutOfChuck, boreOutside, guideThickness, pocketShape, sleeveParams } from '@/geometry/pocketHole';
 import { asRect } from '@/geometry/rect';
 
 const EPS = 1e-6;
@@ -397,7 +397,7 @@ export function planPocketHoles(
     let step = drilling.find((d) => Math.abs(d.thickness - thickness) < 0.01);
     if (!step) {
       // A low-angle pocket's seat is the same in every stock.
-      step = { thickness, count: 0, drill: POCKET.drill, bitOutOfChuck: low ? POCKET.guideOutside + seat + POCKET.through : bitOutOfChuck(pocketShape(thickness, ballDiameter)) };
+      step = { thickness, count: 0, drill: POCKET.drill, bitOutOfChuck: low ? boreOutside(sleeve) + seat + POCKET.through : bitOutOfChuck(pocketShape(thickness, ballDiameter), sleeve) };
       drilling.push(step);
     }
     step.count += holes(part);

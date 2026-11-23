@@ -122,7 +122,8 @@ const startAgain = () => {
   if (state.value) state.value.values = {};
 };
 const quantity = computed({
-  get: () => state.value?.quantity ?? 1,
+  // (One of a thing that is always one, whatever was kept for it before.)
+  get: () => (item.value?.single ? 1 : (state.value?.quantity ?? 1)),
   set: (n: number) => {
     if (state.value) state.value.quantity = Math.min(200, Math.max(1, Math.floor(Number(n)) || 1));
   },
@@ -170,9 +171,11 @@ watch(
   { immediate: true, deep: true },
 );
 
+/** The file's name: by its sizes, where the item names it so. */
+const fileName = computed(() => (item.value ? (!problems.value.length && item.value.fileNameFor?.(values.value)) || item.value.fileName : ''));
 /** The file to print: as many copies as asked for, laid out on the bed. */
 function downloadPrint() {
-  if (item.value && solids.value.length) download(item.value.fileName, write3mf(withCopies(solids.value, quantity.value)), 'model/3mf');
+  if (item.value && solids.value.length) download(fileName.value, write3mf(withCopies(solids.value, quantity.value)), 'model/3mf');
 }
 
 /** A thing cut on the CNC: the machine it is posted for (the shop's machine in use to start with) and its files. */
@@ -441,8 +444,8 @@ const madeWords = (i: JigItem) => (i.made === 'print' ? '3D print' : 'Cut on the
           <PanelTitle :icon="item.made === 'print' ? 'kit' : 'gcode'">{{ item.made === 'print' ? 'File to print' : 'G-code' }}</PanelTitle>
           <template v-if="item.made === 'print'">
             <div class="d-flex align-center">
-              <span>{{ item.fileName }}</span>
-              <span class="flex-grow-1 text-medium-emphasis ml-3">{{ quantity }} on the bed · 3MF, in mm</span>
+              <span>{{ fileName }}</span>
+              <span class="flex-grow-1 text-medium-emphasis ml-3">{{ item.single ? solids.length : quantity }} on the bed · 3MF, in mm</span>
               <v-btn color="primary" variant="flat" :disabled="!solids.length || !!problems.length" data-test="jig-download" @click="downloadPrint">Download</v-btn>
             </div>
           </template>

@@ -48,8 +48,13 @@ export const POCKET = {
   floorRidge: 0.3,
   /** How much narrower than the bore the printed guide's key is, across. */
   keyFit: 0.25,
-  /** The guide's bore outside the part's edge, to the back the drill's chuck stops against. */
+  /**
+   * The guide's bore outside the part's edge, to the back the drill's chuck stops against, at the least: long
+   * enough for one sleeve 20 mm long or two of 10 mm. It is longer for longer sleeves (`boreOutside`), up to
+   * `guideOutsideMost`: past that a regular bit no longer stands far enough out of the chuck.
+   */
   guideOutside: 22,
+  guideOutsideMost: 32,
   /** How far the pilot bit comes through the seat into the pocket. */
   through: 3,
   /**
@@ -71,13 +76,16 @@ export const POCKET_SLEEVE: PocketSleeve = { bore: 4.1, outside: 7, length: 20, 
 export const SLEEVE_LIMITS = { looseBore: 0.6, wall: 0.5, outside: 10, length: 2, lip: 0.8, flange: 16, flangeBehindEdge: 0.2 };
 
 /**
- * How much sleeve the guide's bore holds, from its back to the lip at the fence. The bore meets the edge at an
- * angle, so a fatter sleeve stops a little further from it.
+ * Where the lip at the fence stops a plain sleeve, along the bore from the board's edge. The bore meets the edge
+ * at an angle, so a fatter sleeve stops a little further from it.
  */
-export function sleeveRoom(outside: Mm, angleDeg: number = POCKET.angleDeg): Mm {
+export function sleeveLipAt(outside: Mm, angleDeg: number = POCKET.angleDeg): Mm {
   const a = (angleDeg * Math.PI) / 180;
-  return POCKET.guideOutside - (SLEEVE_LIMITS.lip + (outside / 2) * Math.sin(a)) / Math.cos(a);
+  return -(SLEEVE_LIMITS.lip + (outside / 2) * Math.sin(a)) / Math.cos(a);
 }
+
+/** How much sleeve a bore holds, from its back to the lip at the fence: the longest bore's, unless one is given. */
+export const sleeveRoom = (outside: Mm, angleDeg: number = POCKET.angleDeg, bore: Mm = POCKET.guideOutsideMost): Mm => bore + sleeveLipAt(outside, angleDeg);
 
 /**
  * Where a flanged sleeve let into the fence ends, along the bore from the board's edge: its flange's face, just
@@ -88,9 +96,23 @@ export function fenceFlangeAt(flangeDiameter: Mm, angleDeg: number = POCKET.angl
   return -(SLEEVE_LIMITS.flangeBehindEdge + (flangeDiameter / 2) * Math.sin(a)) / Math.cos(a);
 }
 
-/** How much sleeve a guide holds in all: plain ones to the lip; two flanged ones, from the boss's back to the fence. */
+/**
+ * How much sleeve a guide holds in all, with its bore as long as it may be: plain ones to the lip; two flanged
+ * ones, from the boss's back to the fence.
+ */
 export const sleeveHolds = (sleeve: PocketSleeve, angleDeg: number = POCKET.angleDeg): Mm =>
-  sleeve.flange && sleeve.count === 2 ? POCKET.guideOutside + fenceFlangeAt(sleeve.flange.diameter, angleDeg) : sleeveRoom(sleeve.outside, angleDeg);
+  sleeve.flange && sleeve.count === 2 ? POCKET.guideOutsideMost + fenceFlangeAt(sleeve.flange.diameter, angleDeg) : sleeveRoom(sleeve.outside, angleDeg);
+
+/**
+ * The guide's bore outside the part's edge for a sleeve: as long as its sleeves need in all (one long one, or two
+ * in line), in whole mm, and no shorter than the least. It goes by the 15 degree guide, where a sleeve stops
+ * furthest from the edge, so the guides for one sleeve have one bore at every angle and the bit is chucked once.
+ */
+export function boreOutside(sleeve: PocketSleeve = POCKET_SLEEVE): Mm {
+  const end = sleeve.flange && sleeve.count === 2 ? fenceFlangeAt(sleeve.flange.diameter) : sleeveLipAt(sleeve.outside);
+  const needed = Math.ceil(sleeve.count * sleeve.length - end - 1e-9) || 0;
+  return Math.min(POCKET.guideOutsideMost, Math.max(POCKET.guideOutside, needed));
+}
 
 /** The sleeve a job's guide is printed for: among its params when the shop has one of its own. */
 export const jigSleeve = (jig: Pick<JigInstance, 'params'>): PocketSleeve =>
@@ -285,10 +307,10 @@ export function pocketAxis(size: { width: Mm; height: Mm }, edge: PartEdge, at: 
 /**
  * How far the pilot bit stands out of the drill's chuck: through the guide outside the edge, in through
  * the edge to the seat, and a little way out into the pocket. The chuck stops against the guide's back.
- * About 39 mm in 3/4" stock, which a regular (jobber) 4 mm or 5/32" bit has.
+ * About 39 mm in 3/4" stock with the usual sleeve, which a regular (jobber) 4 mm or 5/32" bit has.
  */
-export function bitOutOfChuck(shape: PocketShape): Mm {
-  return POCKET.guideOutside + shape.seat + POCKET.through;
+export function bitOutOfChuck(shape: PocketShape, sleeve?: PocketSleeve): Mm {
+  return boreOutside(sleeve) + shape.seat + POCKET.through;
 }
 
 /**

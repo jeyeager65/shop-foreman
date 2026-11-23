@@ -202,7 +202,7 @@ describe('the scrap test with low-angle pockets', () => {
     expect(test.notes!(values).join(' ')).toContain('Drilled low-angle pockets take their own guide');
     expect(test.help!(values).join(' ')).toContain('In this stock it takes 1-1/2" (38.1 mm) screws');
     const guide = items.find((i) => i.id === 'pocket-guide')!;
-    expect(guide.fields.find((f) => f.key === 'angle')!.choices!.map((c) => c.value)).toEqual(['15', '3', '6']);
+    expect(guide.fields.find((f) => f.key === 'angle')!.choices!.map((c) => c.value)).toEqual(['15', '3', '6', 'all']);
     expect(guide.inUse!({ ...guide.defaults, angle: '6' }).low).toEqual({ angleDeg: 6, bit: QUARTER });
     expect(guide.inUse!(guide.defaults).low).toBeUndefined();
   });
@@ -211,17 +211,20 @@ describe('the scrap test with low-angle pockets', () => {
 describe('the drill guide for a low-angle pocket', () => {
   const plain: PocketGuide = { thickness: 18.65, drill: 4 };
   for (const angle of LOW_POCKET.angles) {
-    it(`${angle} degrees: the same guide with a flatter bore, a short key and a plate to the pocket's end`, async () => {
+    it(`${angle} degrees: the same guide with a flatter bore, a short key and a plate just past it`, async () => {
       const guide = { ...plain, low: { angleDeg: angle, bit: QUARTER } };
       expect(pocketGuideProblems(guide)).toEqual([]);
       expect(guideAngle(guide)).toBe(angle);
       expect(guideAngle(plain)).toBe(POCKET.angleDeg);
       const arc = arcShape(guide.thickness, QUARTER, angle);
-      // The plate reaches past the pocket's end, not to where a bore this flat would come up through the face.
-      expect(guidePlateIn(guide.thickness, guide.low)).toBe(Math.ceil(arc.end) + GUIDE.plateBeyondKey);
-      expect(guidePlateIn(guide.thickness, guide.low)).toBeLessThan(90);
-      // The key ends where the floor's arc comes up to the screw's axis, past its nose.
+      // The plate reaches a little past the key, not to the pocket's end, nor to where a bore this flat would come
+      // up through the face. It goes by the seat, so both angles' guides are one length, their holes in one place.
+      expect(guidePlateIn(guide.thickness, guide.low)).toBe(Math.ceil(LOW_POCKET.seat + GUIDE.lowKey) + GUIDE.plateBeyondKey + GUIDE.hang.extra);
+      expect(guidePlateIn(guide.thickness, guide.low)).toBe(guidePlateIn(guide.thickness, { angleDeg: angle === 3 ? 6 : 3, bit: QUARTER }));
+      expect(guidePlateIn(guide.thickness, guide.low)).toBeLessThan(arc.end - 10);
+      // The key ends a set way past the seat, before the floor's arc comes up to the screw's axis.
       const end = lowKeyEnd(guide.thickness, guide.low);
+      expect(end).toBeCloseTo(arc.seat + GUIDE.lowKey, 9);
       expect(end).toBeGreaterThan(guideKeyNose(guide.thickness) + 5);
       expect(end).toBeLessThan(arc.end);
       const axis = -guide.thickness / 2 + end * Math.tan((angle * Math.PI) / 180);
@@ -287,7 +290,7 @@ describe('a job whose pocket holes are low-angle ones', () => {
     expect(lists.kreg).toEqual([]);
     const list = buildChecklist(project, job.plan, job.programs, shop.tools, activeMachine(shop)).join(' ');
     expect(list).toContain('Print the pocket-hole guide');
-    expect(list).toMatch(/standing 47\.2 mm out of the chuck/);
+    expect(list).toMatch(/standing 47.2 mm out of the chuck/);
   });
 
   it('6 degrees, and the seat set as on a machine: the guide, the bit and the screws follow', () => {

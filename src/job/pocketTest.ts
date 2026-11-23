@@ -25,7 +25,7 @@
 import { contour, outsideLoop, pocketArc, pocketChannel, pocketLedge, pocketSlot, screwChannel, tabCenters } from '@/cam/cuts';
 import { Path, runTime } from '@/cam/path';
 import { DEFAULT_TAB_FROM_CORNER, DEFAULT_TAB_METHOD } from '@/cam/program';
-import { LOW_POCKET, type LowAngle, POCKET, arcLedge, arcShape, lowCoverFits, pocketShape, slotLedge, slotShape } from '@/geometry/pocketHole';
+import { LOW_POCKET, type LowAngle, POCKET, arcLedge, arcShape, boreOutside, lowCoverFits, pocketShape, slotLedge, slotShape } from '@/geometry/pocketHole';
 import type { Id, Mm, Point, SetupProgram, Shop, Tool, ToolpathStep } from '@/model';
 import { activeMachine, cutDiameter, cuttingLengthOf, finishAllowance, holdingTabHeight, isBallNose, throughDepth, toolSettings } from '@/plan';
 import { writeFluidNC } from '@/post/fluidnc';
@@ -359,6 +359,6 @@ export function buildPocketTest(shop: Shop, materialId: Id, kinds: PocketKind[] 
     at: stock.at,
     cutout: { toolId: cutter.id, name: cutter.name, seconds: cutoutSeconds, tabs: tabCount },
     // How far the bit stands out follows the seat (the first pocket's, when the kinds are mixed).
-    bitOutOfChuck: POCKET.guideOutside + seat + POCKET.through,
+    bitOutOfChuck: boreOutside(shop.pocketSleeve) + seat + POCKET.through,
   };
 }

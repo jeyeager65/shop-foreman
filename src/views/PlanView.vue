@@ -20,7 +20,7 @@ import LengthField from '@/components/LengthField.vue';
 import { LOW_POCKET, POCKET_SLEEVE, sleeveWords } from '@/geometry/pocketHole';
 import { lowAngleOf, pocketSeatOf } from '@/plan/parts';
 import { boresByPecking } from '@/cam/cuts';
-import { POCKET_GUIDE_FILE, buildPocketGuide3mf } from '@/jigs/pocketGuide';
+import { buildPocketGuide3mf, pocketGuidesFileName } from '@/jigs/pocketGuide';
 import { POCKET_TEST, buildPocketTest, pocketTestStock } from '@/job/pocketTest';
 import { baseId, cabinetIdOf, cabinetsOf, copiesOf, partFaces, partTitle, tagged } from '@/design';
 import { cutDiameter, cuttingLengthOf, pinHoleDiameter, setupFaces } from '@/plan';
@@ -196,7 +196,7 @@ async function downloadGuide() {
   pocketError.value = '';
   try {
     // A plain copy: Manifold shouldn't see Vue's reactive proxies.
-    download(POCKET_GUIDE_FILE, await buildPocketGuide3mf(JSON.parse(JSON.stringify(guides)) as typeof guides, wasmUrl), 'model/3mf');
+    download(pocketGuidesFileName(guides), await buildPocketGuide3mf(JSON.parse(JSON.stringify(guides)) as typeof guides, wasmUrl), 'model/3mf');
   } catch (e) {
     pocketError.value = `The guide could not be built: ${e instanceof Error ? e.message : String(e)}`;
   } finally {
