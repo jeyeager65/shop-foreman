@@ -47,6 +47,28 @@ describe('a screw channel', () => {
     expect(Math.max(...points.map((p) => p.u))).toBeGreaterThan(POCKET.seatShare * t * Math.cos((POCKET.angleDeg * Math.PI) / 180));
   });
 
+  it('is one cut: the bit goes down once and lifts out once, and no line is cut twice', () => {
+    for (const r of [3.175 / 2, 2]) {
+      const path = new Path(10);
+      screwChannel(path, { x: 0, y: 0 }, { x: 0, y: 1 }, { thickness: t, angleDeg: POCKET.angleDeg, seat: POCKET.seatShare * t }, r, feeds);
+      // To safe height and over, the cut, and out.
+      expect(path.steps.map((s) => s.kind).join(' ')).toMatch(/^rapid rapid (cut )+rapid$/);
+      const at = { x: 0, y: 0, z: 10 };
+      const seen = new Set<string>();
+      for (const s of path.steps) {
+        const from = `${at.x.toFixed(3)},${at.y.toFixed(3)},${at.z.toFixed(3)}`;
+        if (s.kind !== 'rapid' && s.kind !== 'cut') continue;
+        Object.assign(at, { x: s.x ?? at.x, y: s.y ?? at.y, z: s.z ?? at.z });
+        const to = `${at.x.toFixed(3)},${at.y.toFixed(3)},${at.z.toFixed(3)}`;
+        if (s.kind !== 'cut') continue;
+        // A line gone along again, either way. (One pass wide, a level coming back runs down the floor the one before it cut: allowed.)
+        const key = [from, to].sort().join(' ');
+        if (r < 2) expect(seen.has(key)).toBe(false);
+        seen.add(key);
+      }
+    }
+  });
+
   it('is cut with the 1/8" flat end mill, the widest no wider than the pilot', () => {
     const bit = channelBit(shop, PLYWOOD_3_4_ID)!;
     expect(cutDiameter(bit)).toBeCloseTo(3.175, 3);

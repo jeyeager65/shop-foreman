@@ -784,8 +784,12 @@ export function pocketLedge(path: Path, exit: Point, inward: Point, open: LedgeO
  * pilot (`POCKET.drill`), its walls upright up to the face, its floor along the underside of the screw, which leaves
  * the edge at mid-thickness and climbs at `angleDeg`. It runs from outside the edge (`exit`, along `inward`) to just
  * past the seat (`seat`, along the screw), into the pocket, so the screw lies in it the whole way. A bit narrower than
- * the pilot cuts it in two passes side by side, one to each wall; each level runs out level from the edge, then up the
- * floor's slope, and back.
+ * the pilot cuts it in two passes side by side, one to each wall.
+ *
+ * It is one cut, the bit staying down: each level runs level from outside the edge to where it meets the floor, then
+ * up the floor as far as the level above left it (the rest of the floor is already cut). With two passes a level goes
+ * in along one wall and back along the other, and steps down outside the edge; with one, the levels go in and back by
+ * turns, a level that comes back ramping down the floor into its depth.
  */
 export function screwChannel(path: Path, exit: Point, inward: Point, channel: { thickness: Mm; angleDeg: number; seat: Mm }, r: Mm, f: Feeds): void {
   const at = (u: Mm, y: Mm, z: Mm) => ({ x: exit.x + inward.x * u - inward.y * y, y: exit.y + inward.y * u + inward.x * y, z });
@@ -796,20 +800,38 @@ export function screwChannel(path: Path, exit: Point, inward: Point, channel: { 
   // From clear of the edge to past the seat, the bit's own radius into the pocket.
   const [u0, u1] = [-(r + 1), channel.seat * Math.cos((channel.angleDeg * Math.PI) / 180) + r + half];
   const sides = 2 * r < POCKET.drill - EPS ? [-(half - r), half - r] : [0];
-  for (const z of depthLevels(-floor(u0), f.depthPerPass)) {
-    // Where this level meets the floor's slope: level out to there, then up the floor to the far end.
-    const meet = Math.min(u1, Math.max(u0, (channel.thickness / 2 + half + z) / tan));
-    for (const y of sides) {
-      path.moveTo(at(u0, y, 0));
-      path.cut({ z }, f.plunge);
-      if (meet > u0 + EPS) path.cut(at(meet, y, z), f.feed);
-      path.cut(at(u1, y, Math.max(z, floor(u1))), f.feed);
-      // Back along it, cleaning the walls, and up out of the stock clear of the edge.
-      if (meet > u0 + EPS) path.cut(at(meet, y, z), f.feed);
-      path.cut(at(u0, y, z), f.feed);
-      path.retract();
+  /** Where a level meets the floor's slope. */
+  const meets = (z: Mm) => Math.min(u1, Math.max(u0, (channel.thickness / 2 + half + z) / tan));
+  type Spot = { u: Mm; y: Mm; z: Mm };
+  /** One level along one wall, inward: level to the floor, then up it to where the level above came down to it. */
+  const line = (y: Mm, z: Mm, zAbove: Mm): Spot[] => {
+    const top = meets(zAbove);
+    const spots = [{ u: u0, y, z }, { u: meets(z), y, z }, { u: top, y, z: Math.max(z, floor(top)) }];
+    return spots.filter((s, i) => i === 0 || Math.hypot(s.u - spots[i - 1]!.u, s.z - spots[i - 1]!.z) > EPS);
+  };
+  const passes: Spot[][] = [];
+  let zAbove = 0;
+  depthLevels(-floor(u0), f.depthPerPass).forEach((z, k) => {
+    if (sides.length === 2) {
+      const [a, b] = k % 2 ? [sides[1]!, sides[0]!] : [sides[0]!, sides[1]!];
+      passes.push(line(a, z, zAbove), line(b, z, zAbove).reverse());
+    } else {
+      passes.push(k % 2 ? line(0, z, zAbove).reverse() : line(0, z, zAbove));
     }
+    zAbove = z;
+  });
+  const first = passes[0]![0]!;
+  path.moveTo(at(first.u, first.y, 0));
+  path.cut({ z: 0 }, f.plunge);
+  let here: Spot = { ...first, z: 0 };
+  for (const spot of passes.flat()) {
+    // A move down goes as fast as keeps its downward speed within the plunge feed.
+    const run = Math.hypot(spot.u - here.u, spot.y - here.y, spot.z - here.z);
+    const drop = here.z - spot.z;
+    if (run > EPS) path.cut(at(spot.u, spot.y, spot.z), drop > EPS ? Math.min(f.feed, (f.plunge * run) / drop) : f.feed);
+    here = spot;
   }
+  path.retract();
 }
 
 export function pocketSlot(path: Path, exit: Point, inward: Point, slot: SlotShape, f: Feeds, ledge = false): void {
