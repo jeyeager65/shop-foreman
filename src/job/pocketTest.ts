@@ -36,9 +36,10 @@ export const POCKET_TEST = {
   stock: { y: 100 },
   /** Stock round the board on every side: the kerf that cuts it out and what is left outside it. */
   border: 20,
-  /** Board left either side of the pockets, which are centred along it: from each end to the nearest pocket's centre. And the gap from one pocket to the next. */
-  side: 60,
+  /** From one pocket's centre to the next, and from each end of the board to the nearest pocket's centre: the ends need no more than the pockets leave each other. */
   spacing: 40,
+  /** Board left between the probe's spot and the first pocket's ledge, on a machine whose spot reaches further along the board than that. */
+  clearOfProbe: 5,
   /** How many pockets a test starts with, alike; and the most it may have. */
   count: 2,
   most: 6,
@@ -138,7 +139,8 @@ export function pocketTestBits(shop: Pick<Shop, 'tools'>): Tool[] {
  * clear of the probe's spot (which is on the board's front-left corner); the stock a border bigger all round.
  */
 export function pocketTestStock(machine: { probe: { edgeInset: Mm; clearSquare: Mm } }, pockets: number = POCKET_TEST.count): { x: Mm; y: Mm; first: Mm; board: { x: Mm; y: Mm }; at: Point } {
-  const first = Math.max(POCKET_TEST.side, machine.probe.edgeInset + machine.probe.clearSquare + 20);
+  // Half a pocket with its ledge, past the end of the probe's square.
+  const first = Math.max(POCKET_TEST.spacing, machine.probe.edgeInset + machine.probe.clearSquare + POCKET_TEST.clearOfProbe + POCKET.bore / 2 + POCKET.ledge.margin);
   const board = { x: 2 * first + (pockets - 1) * POCKET_TEST.spacing, y: POCKET_TEST.stock.y };
   const b = POCKET_TEST.border;
   return { x: board.x + 2 * b, y: board.y + 2 * b, first, board, at: { x: b, y: b } };

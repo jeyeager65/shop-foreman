@@ -412,25 +412,25 @@ describe('the scrap test', () => {
     const planned = pocketShape(len('23/32"').mm, BALL);
     expect(POCKET_TEST.count).toBe(2);
     // Centred along the board: as far from its right end as from its left.
-    expect(test.pockets.map((p) => p.x)).toEqual([60, 100]);
+    expect(test.pockets.map((p) => p.x)).toEqual([40, 80]);
     // One seat, the planned one, for both.
     expect(test.seat).toBeCloseTo(planned.seat, 9);
     expect(test.depth).toBeCloseTo(planned.depth, 9);
     // The board, and the stock it is cut out of: a border bigger all round.
-    expect(test.board).toEqual({ x: 160, y: 100 });
+    expect(test.board).toEqual({ x: 120, y: 100 });
     expect(test.at).toEqual({ x: POCKET_TEST.border, y: POCKET_TEST.border });
-    expect(test.stock).toEqual({ x: 200, y: 140 });
+    expect(test.stock).toEqual({ x: 160, y: 140 });
     expect(test.bitOutOfChuck).toBeCloseTo(bitOutOfChuck(planned), 9);
     expect(test.text).toContain('(Pocket 1 of 2: seat 13.7 mm from the edge)');
     expect(test.text).toContain('(Pocket 2 of 2: seat 13.7 mm from the edge)');
     expect(test.text).toContain('(MSG, 1/2 T1 Pocket-hole test: 2 pockets - ');
-    expect(test.text).toContain('(Stock: XMIN=0 XMAX=200 YMIN=0 YMAX=140 ');
+    expect(test.text).toContain('(Stock: XMIN=0 XMAX=160 YMIN=0 YMAX=140 ');
   });
 
   it('then cuts the board out of the stock, on holding tabs, with an end mill that reaches through', () => {
     expect(test.tools.map((t) => t.toolId)).toEqual(['ballnose-1-8', 'endmill-1-4']);
     expect(test.cutout.toolId).toBe('endmill-1-4');
-    expect(test.cutout.tabs).toBeGreaterThanOrEqual(4);
+    expect(test.cutout.tabs).toBeGreaterThanOrEqual(3);
     expect(test.text).toContain('(MSG, 2/2 T2 Pocket-hole test: cut the board out - ');
     expect(test.text.indexOf('cut the board out')).toBeGreaterThan(test.text.indexOf('(Pocket 2 of 2'));
     expect(test.text).toContain('Cut its tabs and trim them flush.');
@@ -579,7 +579,7 @@ describe('the scrap test with other kinds of pocket', () => {
     expect(plain.tools.map((t) => t.toolId)).toEqual(['endmill-1-8']);
     expect(plain.cutout.toolId).toBe('endmill-1-8');
     expect((plain.text.match(/^G38\.2 Z-80 F180 P0\.5/gm) ?? []).length).toBe(1);
-    expect(plain.board).toEqual({ x: 160, y: 100 });
+    expect(plain.board).toEqual({ x: 120, y: 100 });
     expect(plain.text).not.toContain('ball nose');
     expect(plain.pockets[0]!.seconds).toBeLessThan(65);
     const ledged = buildPocketTest(shop, PLYWOOD_3_4_ID, [{ bit: 'flat', ledge: true }, { bit: 'flat', ledge: true }]);
@@ -612,9 +612,9 @@ describe('the scrap test with other kinds of pocket', () => {
   it('cuts every kind side by side, one of each: the ball nose\'s and the end mill\'s, without the ledge and with it', async () => {
     const all = buildPocketTest(shop, PLYWOOD_3_4_ID, POCKET_KINDS);
     expect(all.pockets.map((p) => [p.bit, p.ledge])).toEqual([['ball', false], ['ball', true], ['flat', false], ['flat', true]]);
-    expect(all.pockets.map((p) => p.x)).toEqual([60, 100, 140, 180]);
-    expect(all.board).toEqual({ x: 240, y: 100 });
-    expect(all.stock).toEqual({ x: 280, y: 140 });
+    expect(all.pockets.map((p) => p.x)).toEqual([40, 80, 120, 160]);
+    expect(all.board).toEqual({ x: 200, y: 100 });
+    expect(all.stock).toEqual({ x: 240, y: 140 });
     for (const p of all.pockets) {
       expect(p.seconds).toBeGreaterThan(10);
       expect(p.seconds).toBeLessThan(90);

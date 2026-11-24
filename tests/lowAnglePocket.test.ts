@@ -152,7 +152,10 @@ describe('the scrap test with low-angle pockets', () => {
     expect(test.pockets.map((p) => p.angleDeg)).toEqual([3, 3, 6, 6]);
     expect(test.tools.map((t) => t.toolId)).toEqual(['endmill-1-4']);
     expect(test.depth).toBeCloseTo(arcShape(test.thickness, QUARTER, 3).depth, 9);
-    expect(test.board).toEqual({ x: 2 * POCKET_TEST.side + 3 * POCKET_TEST.spacing, y: 100 });
+    // The ends are as far from the nearest pocket as the pockets are from each other.
+    expect(test.board).toEqual({ x: 5 * POCKET_TEST.spacing, y: 100 });
+    // Six pockets fit a piece of stock 13" long.
+    expect(buildPocketTest(shop, PLYWOOD_3_4_ID, [...LOW_KINDS, ...LOW_KINDS.slice(0, 2)]).stock.x).toBeLessThan(13 * 25.4);
     // The bit that cut the pockets reaches through the stock, so it cuts the board out too: no change.
     expect(test.cutout.toolId).toBe('endmill-1-4');
     expect(test.text).toContain('Pocket-hole test: 4 low-angle pockets');
